@@ -1,5 +1,13 @@
 #include <stdio.h>
+#include "mylib.h"
 
 int main() {
-    printf("yurr\n");
+
+    char * some = malloc(8);
+
+    sprintf(some, "whats up");
+
+    printf("%s\n", some);
+
+    return 0;
 }

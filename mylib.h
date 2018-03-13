@@ -3,6 +3,9 @@
 
 #include <sys/types.h>
 
+#define THREADREQ 1
+#define LIBRARYREQ 0
+
 #define malloc(x) myallocate(x, __FILE__, __LINE__, THREADREQ)
 #define free(x) mydeallocate(x, __FILE__, __LINE__, THREADREQ)
 
