@@ -3,8 +3,8 @@
 
 int main() {
 
-    char * string1 = malloc(80);
-    char * string2 = malloc(80);
+    char * string1 = malloc(100);
+    char * string2 = malloc(100);
     int * number = malloc(sizeof(int));
 
     sprintf(string1, "this is string 1");
