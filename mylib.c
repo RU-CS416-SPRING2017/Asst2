@@ -90,30 +90,34 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int requester) {
     return allocateBetween(size, MEMORY_HEAD, MEMORY_TAIL);
 }
 
-// Frees memory refrenced by ptr that was previously allocated with myallocate
-void mydeallocate(void * ptr, char * fileName, int lineNumber, int request) {
+// Deallocates a block between firstHead and lastTail where the payload is refrenced by ptr
+void deallocateBetween(void * ptr, struct memoryMetadata * firstHead, struct memoryMetadata * lastTail) {
 
     struct memoryMetadata * head = META_PTR(ptr) - 1;
     struct memoryMetadata * tail = getTail(head);
     
-    if (head != MEMORY_HEAD) {
+    if (head != firstHead) {
         struct memoryMetadata * previousTail = head - 1;
         if (previousTail->used == 0) {
             size_t newPayloadSize = head->payloadSize + previousTail->payloadSize + TOTAL_METADATA_SIZE;
             head = getHead(previousTail);
-            setBlockMetadata(head, 0, newPayloadSize);
+            setBlockPayloadSize(head, newPayloadSize);
         }
     }
 
-    if (tail != MEMORY_TAIL) {
+    if (tail != lastTail) {
         struct memoryMetadata * nextHead = tail + 1;
         if (nextHead->used == 0) {
             size_t newPayloadSize = tail->payloadSize + nextHead->payloadSize + TOTAL_METADATA_SIZE;
             tail = getTail(nextHead);
-            setBlockMetadata(head, 0, newPayloadSize);
+            setBlockPayloadSize(head, newPayloadSize);
         }
     }
 
-    head->used = 0;
-    tail->used = 0;
+    setBlockUsed(head, 0);
+}
+
+// Frees memory refrenced by ptr that was previously allocated with myallocate
+void mydeallocate(void * ptr, char * fileName, int lineNumber, int request) {
+    deallocateBetween(ptr, MEMORY_HEAD, MEMORY_TAIL);
 }
