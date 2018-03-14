@@ -6,8 +6,8 @@
 // Block size of block with payload x
 #define BLOCK_SIZE(x) x + (METADATA_SIZE * 2)
 
-#define CHAR_PTR(x) ((char *) x)
-#define META_PTR(x) ((struct memoryMetadata *) x)
+#define CHAR_PTR(x) ((char *) (x))
+#define META_PTR(x) ((struct memoryMetadata *) (x))
 
 struct memoryMetadata {
     size_t size;
