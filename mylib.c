@@ -34,39 +34,60 @@ struct memoryMetadata * getHead(struct memoryMetadata * tail) {
     return META_PTR(CHAR_PTR(tail) - METADATA_SIZE - tail->payloadSize);
 }
 
-// Initializes a block of memory with metadata
-void initializeBlock(void * block, int used, size_t payloadSize) {
+// Sets the payloadSize in the head and tail of block
+void setBlockPayloadSize(void * block, size_t payloadSize) {
+    struct memoryMetadata * head = META_PTR(block);
+    head->payloadSize = payloadSize;
+    getTail(head)->payloadSize = payloadSize;
+}
+
+// Sets used flag in the head and tail of block
+void setBlockUsed(void * block, int used) {
+    struct memoryMetadata * head = META_PTR(block);
+    head->used = used;
+    getTail(head)->used = used;
+}
+
+// Sets metadata in the head and tail of block
+void setBlockMetadata(void * block, int used, size_t payloadSize) {
     struct memoryMetadata * head = META_PTR(block);
     head->used = used;
     head->payloadSize = payloadSize;
     *getTail(head) = *head;
 }
 
-// Allocates size bytes in memory and returns a pointer to it
-void * myallocate(size_t size, char * fileName, int lineNumber, int requester) {
-    
-    struct memoryMetadata * head = MEMORY_HEAD;
+// Allocates memory of size between firstHead and lastTail.
+// Returns 0 if no space available, else returns pointer
+// to allocated memory.
+void * allocateBetween(size_t size, struct memoryMetadata * firstHead, struct memoryMetadata * lastTail) {
 
-    if (head->payloadSize == 0) {
-        initializeBlock(memory, 0, MEMORY_SIZE - TOTAL_METADATA_SIZE);
-    }
+    struct memoryMetadata * head = firstHead;
     
-    while (head->used || head->payloadSize < size) {
+    while (head->used || size > head->payloadSize) {
         head = META_PTR(CHAR_PTR(head) + BLOCK_SIZE(head->payloadSize));
-        if ((head - 1) == MEMORY_TAIL) { return 0; }
+        if ((head - 1) == lastTail) { return 0; }
     }
 
     if ((size + TOTAL_METADATA_SIZE) >= head->payloadSize) {
-        head->used = 1;
-        getTail(head)->used = 1;
+        setBlockUsed(head, 1);
         return head + 1;
     }
 
-    size_t nextPayloadSize = head->payloadSize - (size + METADATA_SIZE);
-    initializeBlock(head, 1, size);
-    initializeBlock(getTail(head) + 1, 0, nextPayloadSize);
+    size_t nextPayloadSize = head->payloadSize - (size + TOTAL_METADATA_SIZE);
+    setBlockMetadata(head, 1, size);
+    setBlockMetadata(getTail(head) + 1, 0, nextPayloadSize);
 
     return head + 1;
+}
+
+// Allocates size bytes in memory and returns a pointer to it
+void * myallocate(size_t size, char * fileName, int lineNumber, int requester) {
+
+    if (MEMORY_HEAD->payloadSize == 0) {
+        setBlockMetadata(memory, 0, MEMORY_SIZE - TOTAL_METADATA_SIZE);
+    }
+    
+    return allocateBetween(size, MEMORY_HEAD, MEMORY_TAIL);
 }
 
 // Frees memory refrenced by ptr that was previously allocated with myallocate
@@ -80,7 +101,7 @@ void mydeallocate(void * ptr, char * fileName, int lineNumber, int request) {
         if (previousTail->used == 0) {
             size_t newPayloadSize = head->payloadSize + previousTail->payloadSize + TOTAL_METADATA_SIZE;
             head = getHead(previousTail);
-            initializeBlock(head, 0, newPayloadSize);
+            setBlockMetadata(head, 0, newPayloadSize);
         }
     }
 
@@ -89,7 +110,7 @@ void mydeallocate(void * ptr, char * fileName, int lineNumber, int request) {
         if (nextHead->used == 0) {
             size_t newPayloadSize = tail->payloadSize + nextHead->payloadSize + TOTAL_METADATA_SIZE;
             tail = getTail(nextHead);
-            initializeBlock(head, 0, newPayloadSize);
+            setBlockMetadata(head, 0, newPayloadSize);
         }
     }
 
