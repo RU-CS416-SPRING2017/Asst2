@@ -9,13 +9,17 @@
 #define CHAR_PTR(x) ((char *) (x))
 #define META_PTR(x) ((struct memoryMetadata *) (x))
 
+// Metadata for a block of memory.
+// Used in head and tail.
 struct memoryMetadata {
     size_t size;
     int used;
 };
 
+// "Main memory"
 char memory[MEMORY_SIZE];
 
+// Allocates size bytes in memory and returns a pointer to it
 void * myallocate(size_t size, char * fileName, int lineNumber, int requester) {
     
     struct memoryMetadata * head = META_PTR(memory);
@@ -30,6 +34,9 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int requester) {
 
     head->used = 1;
     head->size = size;
+
+    struct memoryMetadata * tail = META_PTR(CHAR_PTR(head) + METADATA_SIZE + size);
+    *tail = *head;
 
     return CHAR_PTR(head) + METADATA_SIZE;
 }
