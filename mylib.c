@@ -3,11 +3,16 @@
 // Size macros
 #define MEMORY_SIZE (8 * 1024 * 1024)
 #define METADATA_SIZE sizeof(struct memoryMetadata)
-#define BLOCK_SIZE(x) x + (METADATA_SIZE * 2) // x is payload of block
+#define TOTAL_METADATA_SIZE (METADATA_SIZE * 2)
+#define BLOCK_SIZE(x) x + TOTAL_METADATA_SIZE // x is payload of block
 
 // Casting macros
 #define CHAR_PTR(x) ((char *) (x))
 #define META_PTR(x) ((struct memoryMetadata *) (x))
+
+// Macros to metadata ends of the memory
+#define MEMORY_HEAD META_PTR(memory)
+#define MEMORY_TAIL META_PTR(memory + MEMORY_SIZE - METADATA_SIZE)
 
 // Metadata for a block of memory.
 // Used in head and tail.
@@ -29,22 +34,42 @@ struct memoryMetadata * getHead(struct memoryMetadata * tail) {
     return META_PTR(CHAR_PTR(tail) - METADATA_SIZE - tail->payloadSize);
 }
 
+// Initializes a block of memory with metadata
+void initializeBlock(void * block, int used, size_t payloadSize) {
+    struct memoryMetadata * head = META_PTR(block);
+    head->used = used;
+    head->payloadSize = payloadSize;
+    *getTail(head) = *head;
+}
+
 // Allocates size bytes in memory and returns a pointer to it
 void * myallocate(size_t size, char * fileName, int lineNumber, int requester) {
     
-    struct memoryMetadata * head = META_PTR(memory);
+    struct memoryMetadata * head = MEMORY_HEAD;
+
+    if (head->payloadSize == 0) {
+        initializeBlock(memory, 0, MEMORY_SIZE - TOTAL_METADATA_SIZE);
+    }
     
-    while (head->used) {
+    while (head->used || head->payloadSize < size) {
         head = META_PTR(CHAR_PTR(head) + BLOCK_SIZE(head->payloadSize));
+        if ((head - 1) == MEMORY_TAIL) { return 0; }
     }
 
-    if (((CHAR_PTR(head) - memory) + BLOCK_SIZE(size)) > MEMORY_SIZE) {
-        return 0;
+    if ((size + TOTAL_METADATA_SIZE) >= head->payloadSize) {
+        head->used = 1;
+        getTail(head)->used = 1;
+        return head + 1;
     }
 
-    head->used = 1;
-    head->payloadSize = size;
-    *getTail(head) = *head;
+    size_t nextPayloadSize = head->payloadSize - (size + METADATA_SIZE);
+    initializeBlock(head, 1, size);
+    initializeBlock(getTail(head) + 1, 0, nextPayloadSize);
 
-    return CHAR_PTR(head) + METADATA_SIZE;
+    return head + 1;
+}
+
+void mydeallocate(void * ptr, char * fileName, int lineNumber, int request) {
+
+
 }
