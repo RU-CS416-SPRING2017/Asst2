@@ -8,6 +8,7 @@
 #define BLK_SIZE(x) (x + DBL_BLK_META_SIZE) // x is payload size of block
 
 // Casting macros
+#define VOID_PTR(x) ((void *) (x))
 #define CHAR_PTR(x) ((char *) (x))
 #define BLK_META_PTR(x) ((struct blockMetadata *) (x))
 #define MEM_META_PTR(x) ((struct memoryMetadata *) (x))
@@ -134,7 +135,7 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
 // Deallocates a block between firstHead and lastTail where the payload is refrenced by ptr
 void deallocateFrom(void * ptr, struct memoryPartition * partition) {
 
-    if (ptr >= partition->firstHead && ptr < partition->lastTail) {
+    if (ptr >= VOID_PTR(partition->firstHead + 1) && ptr < VOID_PTR(partition->lastTail)) {
 
         struct blockMetadata * head = BLK_META_PTR(ptr) - 1;
         struct blockMetadata * tail = getTail(head);
