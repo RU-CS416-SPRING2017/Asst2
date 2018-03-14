@@ -14,11 +14,24 @@
 #define MEMORY_HEAD META_PTR(memory)
 #define MEMORY_TAIL META_PTR(memory + MEMORY_SIZE - BLOCK_METADATA_SIZE)
 
-// Metadata for a block of memory.
+// Metadata for a block in memory.
 // Used in head and tail.
 struct blockMetadata {
     size_t payloadSize;
     int used;
+};
+
+// Holds info for a partition in memory
+struct memoryPartition {
+    struct blockMetadata * firstHead;
+    struct blockMetadata * lastTail;
+};
+
+// Metadata for memory
+struct memoryMetadata {
+    int initialized;
+    struct memoryPartition libraryMemoryPartition;
+    struct memoryPartition threadsMemoryPartition;
 };
 
 // "Main memory"
