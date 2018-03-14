@@ -1,11 +1,11 @@
 #include "mylib.h"
 
-// 8 * 1024 * 1024 = 2^23
-#define MEMORY_SIZE 8388608
+// Size macros
+#define MEMORY_SIZE (8 * 1024 * 1024)
 #define METADATA_SIZE sizeof(struct memoryMetadata)
-// Block size of block with payload x
-#define BLOCK_SIZE(x) x + (METADATA_SIZE * 2)
+#define BLOCK_SIZE(x) x + (METADATA_SIZE * 2) // x is payload of block
 
+// Casting macros
 #define CHAR_PTR(x) ((char *) (x))
 #define META_PTR(x) ((struct memoryMetadata *) (x))
 
