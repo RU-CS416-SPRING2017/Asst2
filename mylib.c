@@ -69,7 +69,30 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int requester) {
     return head + 1;
 }
 
+// Frees memory refrenced by ptr that was previously allocated with myallocate
 void mydeallocate(void * ptr, char * fileName, int lineNumber, int request) {
 
+    struct memoryMetadata * head = META_PTR(ptr) - 1;
+    struct memoryMetadata * tail = getTail(head);
+    
+    if (head != MEMORY_HEAD) {
+        struct memoryMetadata * previousTail = head - 1;
+        if (previousTail->used == 0) {
+            size_t newPayloadSize = head->payloadSize + previousTail->payloadSize + TOTAL_METADATA_SIZE;
+            head = getHead(previousTail);
+            initializeBlock(head, 0, newPayloadSize);
+        }
+    }
 
+    if (tail != MEMORY_TAIL) {
+        struct memoryMetadata * nextHead = tail + 1;
+        if (nextHead->used == 0) {
+            size_t newPayloadSize = tail->payloadSize + nextHead->payloadSize + TOTAL_METADATA_SIZE;
+            tail = getTail(nextHead);
+            initializeBlock(getHead(tail), 0, newPayloadSize);
+        }
+    }
+
+    head->used = 0;
+    tail->used = 0;
 }
