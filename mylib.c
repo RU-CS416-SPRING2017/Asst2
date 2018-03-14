@@ -89,7 +89,7 @@ void mydeallocate(void * ptr, char * fileName, int lineNumber, int request) {
         if (nextHead->used == 0) {
             size_t newPayloadSize = tail->payloadSize + nextHead->payloadSize + TOTAL_METADATA_SIZE;
             tail = getTail(nextHead);
-            initializeBlock(getHead(tail), 0, newPayloadSize);
+            initializeBlock(head, 0, newPayloadSize);
         }
     }
 
