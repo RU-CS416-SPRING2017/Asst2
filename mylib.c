@@ -125,6 +125,8 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
         memoryInfo->library.lastTail = libraryTail;
         memoryInfo->threads.firstHead = threadsHead;
         memoryInfo->threads.lastTail = threadsTail;
+
+        memoryInfo->initialized = 1;
     }
 
     if (request == LIBRARYREQ) { return allocateFrom(size, &(memoryInfo->library)); }
