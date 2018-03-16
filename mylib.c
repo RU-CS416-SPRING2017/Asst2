@@ -21,8 +21,8 @@
 // Metadata for a block in memory.
 // Used in head and tail.
 struct blockMetadata {
-    size_t payloadSize;
     int used;
+    size_t payloadSize;
 };
 
 // Holds info for a partition in memory
