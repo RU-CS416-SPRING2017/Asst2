@@ -14,4 +14,4 @@ When called, `myallocate` first checks if `memory` is initialized. If not, `memo
 
 ### `mydeallocate`
 
-When called, `mydeallocate` first checks if `ptr` is in the requested "parition". If it is, `mydeallocate` sets the "block" to free and coalesces with imediate neighboring "blocks" if they are free.
+When called, `mydeallocate` first checks if `ptr` is in the requested "parition". If it is, `mydeallocate` sets the corresponding "block" to free and coalesces with imediate neighboring "blocks" if they are free.
