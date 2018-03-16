@@ -21,6 +21,12 @@
 
 #include "my_pthread_t.h"
 
+// Macros for making library malloc calls
+#undef malloc
+#undef free
+#define malloc(x) myallocate(x, __FILE__, __LINE__, LIBRARYREQ)
+#define free(x) mydeallocate(x, __FILE__, __LINE__, LIBRARYREQ)
+
 // Checks if library is properly initialized
 char initialized = 0;
 // Exit context
