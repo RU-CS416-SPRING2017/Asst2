@@ -20,6 +20,7 @@
 #include <ucontext.h>
 #include <sys/time.h>
 #include <signal.h>
+#include "mylib.h"
 
 // typedef uint my_pthread_t;
 typedef void * my_pthread_t;
@@ -61,7 +62,7 @@ struct priorityQueue {
 };
 
 // Feel free to add your own auxiliary data structures
-
+extern tcb * currentTcb;
 
 /* Function Declarations: */
 

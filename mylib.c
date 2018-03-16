@@ -1,4 +1,4 @@
-#include "mylib.h"
+#include "my_pthread_t.h"
 
 // Size macros
 #define MEM_SIZE (8 * 1024 * 1024)
