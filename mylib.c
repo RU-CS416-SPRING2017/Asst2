@@ -6,12 +6,15 @@
 #define DBL_BLK_META_SIZE (BLK_META_SIZE * 2)
 #define MEM_META_SIZE sizeof(struct memoryMetadata)
 #define BLK_SIZE(x) (x + DBL_BLK_META_SIZE) // x is payload size of block
+#define PAGE_SIZE sysconf(_SC_PAGE_SIZE)
+#define PAGE_META_SIZE sizeof(struct pageMetadata)
 
 // Casting macros
 #define VOID_PTR(x) ((void *) (x))
 #define CHAR_PTR(x) ((char *) (x))
 #define BLK_META_PTR(x) ((struct blockMetadata *) (x))
 #define MEM_META_PTR(x) ((struct memoryMetadata *) (x))
+#define PAGE_META_PTR(x) ((struct pageMetadata *) (x))
 
 // These macros determine how much of memory should
 // be partitioned for the thread library vs threads
@@ -31,11 +34,16 @@ struct memoryPartition {
     struct blockMetadata * lastTail;
 };
 
+// Metada for a thread page.
+struct pageMetadata {
+    tcb * thread;
+    struct memoryPartition partition;
+};
+
 // Metadata for memory
 struct memoryMetadata {
-    int initialized;
-    struct memoryPartition library;
-    struct memoryPartition threads;
+    struct memoryPartition libraryMemory;
+    char * threadsMemory;
 };
 
 // "Main memory"
@@ -73,6 +81,26 @@ void setBlockMetadata(void * block, int used, size_t payloadSize) {
     *getTail(head) = *head;
 }
 
+// Creates a partition
+struct memoryPartition createPartition(void * partition, size_t size) {
+    size_t payloadSize = size - DBL_BLK_META_SIZE;
+    setBlockMetadata(partition, 0, payloadSize);
+    struct memoryPartition ret;
+    ret.firstHead = partition;
+    ret.lastTail = getTail(partition);
+    return ret;
+}
+
+// Initializes a page at page for thread
+void initializePage(struct pageMetadata * page, tcb * thread) {
+    page->thread = thread;
+    page->partition = createPartition(page + 1, PAGE_SIZE - PAGE_META_SIZE);
+}
+
+struct pageMetadata * getPage(char * mem, tcb * thread) {
+
+}
+
 // Allocates memory of size between firstHead and lastTail.
 // Returns 0 if no space available, else returns pointer
 // to allocated memory.
@@ -102,36 +130,43 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
 
     struct memoryMetadata * memoryInfo = MEM_META_PTR(memory);
 
-    if (!(memoryInfo->initialized)) {
+    if (!(memoryInfo->threadsMemory)) {
         
         size_t spaceLeft = MEM_SIZE - MEM_META_SIZE;
         size_t numDiv = LIBRARY_MEMORY_WEIGHT + THREADS_MEMORY_WEIGHT;
         size_t divSize = spaceLeft / numDiv;
 
-        size_t threadsPartitionSize = divSize * THREADS_MEMORY_WEIGHT;
-        size_t threadsPayloadSize = threadsPartitionSize - DBL_BLK_META_SIZE;
-        size_t libraryPartitionSize = spaceLeft - threadsPartitionSize;
-        size_t libraryPayloadSize = libraryPartitionSize - DBL_BLK_META_SIZE;
+        size_t threadsMemorySize = divSize * THREADS_MEMORY_WEIGHT;
+        size_t libraryMemorySize = spaceLeft - threadsMemorySize;
 
-        struct blockMetadata * libraryHead = BLK_META_PTR(memoryInfo + 1);
-        setBlockMetadata(libraryHead, 0, libraryPayloadSize);
-        struct blockMetadata * libraryTail = getTail(libraryHead);
-
-        struct blockMetadata * threadsHead = libraryTail + 1;
-        setBlockMetadata(threadsHead, 0, threadsPayloadSize);
-        struct blockMetadata * threadsTail = getTail(threadsHead);
-
-        memoryInfo->library.firstHead = libraryHead;
-        memoryInfo->library.lastTail = libraryTail;
-        memoryInfo->threads.firstHead = threadsHead;
-        memoryInfo->threads.lastTail = threadsTail;
-
-        memoryInfo->initialized = 1;
+        memoryInfo->libraryMemory = createPartition(memoryInfo + 1, libraryMemorySize);
+        memoryInfo->threadsMemory = CHAR_PTR(memoryInfo->libraryMemory.lastTail + 1);
     }
 
-    if (request == LIBRARYREQ) { return allocateFrom(size, &(memoryInfo->library)); }
-    else if (request == THREADREQ) { return allocateFrom(size, &(memoryInfo->threads)); }
-    else { return 0; }
+    if (request == LIBRARYREQ) {
+        return allocateFrom(size, &(memoryInfo->libraryMemory));
+
+    } else if (request == THREADREQ) {
+
+        char * threadsMemory;
+        for (
+            threadsMemory = memoryInfo->threadsMemory;
+            threadsMemory <= (memory + MEM_SIZE - PAGE_SIZE);
+            threadsMemory += PAGE_SIZE
+
+        ) {     
+            struct pageMetadata * threadPage = PAGE_META_PTR(threadsMemory);
+            if (!(threadPage->thread)) {
+                initializePage(threadPage, currentTcb);
+                return allocateFrom(size, &(threadPage->partition));
+            } else if (currentTcb == threadPage->thread) {
+                return allocateFrom(size, &(threadPage->partition));
+            }
+        }
+
+        return 0;
+
+    } else { return 0; }
 }
 
 // Deallocates a block between firstHead and lastTail where the payload is refrenced by ptr
@@ -167,6 +202,6 @@ void deallocateFrom(void * ptr, struct memoryPartition * partition) {
 // Frees memory refrenced by ptr that was previously allocated with myallocate
 void mydeallocate(void * ptr, char * fileName, int lineNumber, int request) {
     struct memoryMetadata * memoryInfo = MEM_META_PTR(memory);
-    if (request == LIBRARYREQ) { deallocateFrom(ptr, &(memoryInfo->library)); }
-    else if (request == THREADREQ) { deallocateFrom(ptr, &(memoryInfo->threads)); }
+    if (request == LIBRARYREQ) { deallocateFrom(ptr, &(memoryInfo->libraryMemory)); }
+    else if (request == THREADREQ) { deallocateFrom(ptr, &(memoryInfo->threadsMemory)); }
 }
