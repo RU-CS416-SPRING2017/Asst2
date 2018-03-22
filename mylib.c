@@ -38,6 +38,9 @@ struct memoryPartition {
 struct pageMetadata {
     tcb * thread;
     struct memoryPartition partition;
+    int inUse; //checks if page is in use
+    int pageCount; //page counter
+
 };
 
 // Metadata for memory
