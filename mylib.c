@@ -208,3 +208,11 @@ void mydeallocate(void * ptr, char * fileName, int lineNumber, int request) {
     if (request == LIBRARYREQ) { deallocateFrom(ptr, &(memoryInfo->libraryMemory)); }
     else if (request == THREADREQ) { deallocateFrom(ptr, &(memoryInfo->threadsMemory)); }
 }
+
+/*****SIGSEGV HANDLER prototype******/
+/**
+ * static void handler(int sig, siginfo_t *si, void *unused)
+ * {
+ * 	printf("Got SIGSEGV at Address: 0X%lx\n", (long) si->si_addr);
+ * 	...
+ * }

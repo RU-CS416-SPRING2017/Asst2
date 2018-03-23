@@ -18,4 +18,5 @@ When called, `mydeallocate` first checks if `ptr` is in the requested "parition"
 
 ## Phase B: Virtual Memory
 
-In order to achieve virtual memory allocation, ther needs to be a level of abstraction between the pointers the memory allocator returns and the actual physical locations of pages in memory.
+In order to achieve virtual memory allocation, their needs to be a level of abstraction between the pointers the memory allocator returns and the actual physical locations of pages in memory.
+
