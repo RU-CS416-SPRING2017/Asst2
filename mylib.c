@@ -22,6 +22,14 @@
 #define PAGE_META_PTR(x) ((struct pageMetadata *) (x))
 #define PG_TBL_ROW_PTR(x) ((struct pageTableRow *) (x))
 
+// Direct access macros
+#define MEM_INFO MEM_META_PTR(memory)
+#define LIB_MEM_PART (MEM_INFO->libraryMemory)
+#define PG_TBL (MEM_INFO->pageTable)
+#define NUM_PGS (MEM_INFO->numPages)
+#define SHRD_MEM_PART (MEM_INFO->sharedMemory)
+#define SWAP_FILE (MEM_INFO->swapfile)
+
 // These macros determine how much of memory should
 // be partitioned for the thread library vs threads
 #define LIBRARY_MEMORY_WEIGHT 1
@@ -148,8 +156,6 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
 
         // Allocating space
         memory = memalign(PAGE_SIZE, MEM_SIZE);
-        mprotect(memory, MEM_SIZE, PROT_NONE);
-        mprotect(memory, MEM_SIZE, PROT_WRITE|PROT_READ);
         struct memoryMetadata * memoryInfo = MEM_META_PTR(memory);
         
         // Calculating temporary numbers
@@ -194,7 +200,8 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
             memoryInfo->pageTable[i].pysicalLocation = NULL;
             memoryInfo->pageTable[i].virtualLocation = j;
             i++;
-        }  
+        }
+        mprotect(memPages, numMemPages * PAGE_SIZE, PROT_NONE);
     }
 
     struct memoryMetadata * memoryInfo = MEM_META_PTR(memory);
@@ -204,25 +211,11 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
 
     } else if (request == THREADREQ) {
 
-        // char * threadsMemory;
-        // for (
-        //     threadsMemory = memoryInfo->threadsMemory;
-        //     threadsMemory <= (memory + MEM_SIZE - PAGE_SIZE);
-        //     threadsMemory += PAGE_SIZE
+        
 
-        // ) {     
-        //     struct pageMetadata * threadPage = PAGE_META_PTR(threadsMemory);
-        //     if (!(threadPage->thread)) {
-        //         initializePage(threadPage, currentTcb);
-        //         return allocateFrom(size, &(threadPage->partition));
-        //     } else if (currentTcb == threadPage->thread) {
-        //         return allocateFrom(size, &(threadPage->partition));
-        //     }
-        // }
+        return NULL;
 
-        return 0;
-
-    } else { return 0; }
+    } else { return NULL; }
 }
 
 // Deallocates a block between firstHead and lastTail where the payload is refrenced by ptr
