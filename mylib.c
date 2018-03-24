@@ -61,7 +61,7 @@ struct pageTableRow {
 
 // Metadata for thread's memory
 struct threadMemoryMetadata {
-    struct memeoryPartition partition;
+    struct memoryPartition partition;
 };
 
 // Metadata for memory
@@ -157,6 +157,7 @@ void * allocateFrom(size_t size, struct memoryPartition * partition) {
 
 void onAccess(int sig, siginfo_t * si, void * unused) {
     printf("Got SIGSEGV at address: 0x%lx\n",(long) si->si_addr);
+    exit(SIGSEGV);
 }
 
 // Allocates size bytes in memory and returns a pointer to it
