@@ -111,6 +111,19 @@ struct memoryPartition createPartition(void * partition, size_t size) {
     return ret;
 }
 
+// Adds size bytes to the current size of the partition
+void extendPartition(struct memoryPartition * partition, size_t size) {
+    if (partition->lastTail->used) {
+        struct blockMetadata * newHead = partition->lastTail + 1;
+        setBlockMetadata(newHead, 0, size - DBL_BLK_META_SIZE);
+        partition->lastTail = getTail(newHead);
+    } else {
+        struct blockMetadata * lastHead = getHead(partition->lastTail);
+        setBlockMetadata(lastHead, 0, lastHead->payloadSize + size);
+        partition->lastTail = getTail(lastHead);
+    }
+}
+
 // Allocates memory of size between firstHead and lastTail.
 // Returns 0 if no space available, else returns pointer
 // to allocated memory.
