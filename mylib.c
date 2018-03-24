@@ -152,7 +152,7 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
         // mprotect(memory, MEM_SIZE, PROT_WRITE|PROT_READ);
         struct memoryMetadata * memoryInfo = MEM_META_PTR(memory);
         
-        // Calculating temporary size variables
+        // Calculating temporary numbers
         size_t spaceLeft = MEM_SIZE - MEM_META_SIZE - SHRD_MEM_SIZE;
         size_t numDiv = LIBRARY_MEMORY_WEIGHT + THREADS_MEMORY_WEIGHT;
         size_t divSize = spaceLeft / numDiv;
