@@ -21,6 +21,7 @@
 #define MEM_META_PTR(x) ((struct memoryMetadata *) (x))
 #define PAGE_META_PTR(x) ((struct pageMetadata *) (x))
 #define PG_TBL_ROW_PTR(x) ((struct pageTableRow *) (x))
+#define THRD_META_PTR(x) ((struct threadMemoryMetadata *) (x))
 
 // Direct access macros
 #define MEM_INFO MEM_META_PTR(memory)
@@ -30,6 +31,7 @@
 #define MEM_PGS CHAR_PTR(PG_TBL + NUM_PGS)
 #define SWAP_FILE (MEM_INFO->swapfile)
 #define SHRD_MEM_PART (MEM_INFO->sharedMemory)
+#define THRD_MEM (THRD_META_PTR(MEM_PGS))
 
 // These macros determine how much of memory should
 // be partitioned for the thread library vs threads
@@ -55,6 +57,11 @@ struct pageTableRow {
     unsigned int pageNumber;
     void * pysicalLocation;
     off_t virtualLocation;
+};
+
+// Metadata for thread's memory
+struct threadMemoryMetadata {
+    struct memeoryPartition partition;
 };
 
 // Metadata for memory
@@ -221,9 +228,7 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
 
     } else if (request == THREADREQ) {
 
-        
-
-        return NULL;
+        return allocateFrom(size, &(THRD_MEM->partition));
 
     } else { return NULL; }
 }
