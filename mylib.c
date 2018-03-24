@@ -1,13 +1,18 @@
+#include <malloc.h>
 #include "my_pthread_t.h"
+#include <sys/mman.h>
+#include <fcntl.h>
 
 // Size macros
-#define MEM_SIZE (8 * 1024 * 1024)
+#define MEM_SIZE (8 * 1000 * 1000)
 #define BLK_META_SIZE sizeof(struct blockMetadata)
 #define DBL_BLK_META_SIZE (BLK_META_SIZE * 2)
 #define MEM_META_SIZE sizeof(struct memoryMetadata)
 #define BLK_SIZE(x) (x + DBL_BLK_META_SIZE) // x is payload size of block
 #define PAGE_SIZE sysconf(_SC_PAGE_SIZE)
-#define PAGE_META_SIZE sizeof(struct pageMetadata)
+#define PG_TBL_ROW_SIZE sizeof(struct pageTableRow)
+#define SWAP_SIZE (MEM_SIZE * 2)
+#define SHRD_MEM_SIZE (PAGE_SIZE * 4)
 
 // Casting macros
 #define VOID_PTR(x) ((void *) (x))
@@ -15,6 +20,7 @@
 #define BLK_META_PTR(x) ((struct blockMetadata *) (x))
 #define MEM_META_PTR(x) ((struct memoryMetadata *) (x))
 #define PAGE_META_PTR(x) ((struct pageMetadata *) (x))
+#define PG_TBL_ROW_PTR(x) ((struct pageTableRow *) (x))
 
 // These macros determine how much of memory should
 // be partitioned for the thread library vs threads
@@ -34,20 +40,25 @@ struct memoryPartition {
     struct blockMetadata * lastTail;
 };
 
-// Metada for a thread page.
-struct pageMetadata {
+// Repressents a row in the page table
+struct pageTableRow {
     tcb * thread;
-    struct memoryPartition partition;
+    unsigned int pageNumber;
+    void * pysicalLocation;
+    off_t virtualLocation;
 };
 
 // Metadata for memory
 struct memoryMetadata {
     struct memoryPartition libraryMemory;
-    char * threadsMemory;
+    struct pageTableRow * pageTable;
+    size_t numPages;
+    struct memoryPartition sharedMemory;
+    int swapfile;
 };
 
 // "Main memory"
-char memory[MEM_SIZE] = { 0 };
+char * memory = NULL;
 
 // Returns the tail of a block whose initialized head is given
 struct blockMetadata * getTail(struct blockMetadata * head) {
@@ -91,16 +102,6 @@ struct memoryPartition createPartition(void * partition, size_t size) {
     return ret;
 }
 
-// Initializes a page at page for thread
-void initializePage(struct pageMetadata * page, tcb * thread) {
-    page->thread = thread;
-    page->partition = createPartition(page + 1, PAGE_SIZE - PAGE_META_SIZE);
-}
-
-struct pageMetadata * getPage(char * mem, tcb * thread) {
-
-}
-
 // Allocates memory of size between firstHead and lastTail.
 // Returns 0 if no space available, else returns pointer
 // to allocated memory.
@@ -125,44 +126,93 @@ void * allocateFrom(size_t size, struct memoryPartition * partition) {
     return head + 1;
 }
 
+void onAccess(int sig, siginfo_t * si, void * unused) {
+    printf("Got SIGSEGV at address: 0x%lx\n",(long) si->si_addr);
+}
+
 // Allocates size bytes in memory and returns a pointer to it
 void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
 
-    struct memoryMetadata * memoryInfo = MEM_META_PTR(memory);
+    // If memory is null, initialize it
+    if (!memory) {
 
-    if (!(memoryInfo->threadsMemory)) {
+        struct sigaction sa;
+        sa.sa_flags = SA_SIGINFO;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_sigaction = onAccess;
+
+        if (sigaction(SIGSEGV, &sa, NULL) == -1) {
+            fprintf(stderr, "Fatal error setting up signal handler\n");
+            exit(EXIT_FAILURE);
+        }
+
+        // Allocating space
+        memory = memalign(PAGE_SIZE, MEM_SIZE);
+        mprotect(memory, MEM_SIZE, PROT_NONE);
+        // mprotect(memory, MEM_SIZE, PROT_WRITE|PROT_READ);
+        struct memoryMetadata * memoryInfo = MEM_META_PTR(memory);
         
-        size_t spaceLeft = MEM_SIZE - MEM_META_SIZE;
+        // Calculating temporary size variables
+        size_t spaceLeft = MEM_SIZE - MEM_META_SIZE - SHRD_MEM_SIZE;
         size_t numDiv = LIBRARY_MEMORY_WEIGHT + THREADS_MEMORY_WEIGHT;
         size_t divSize = spaceLeft / numDiv;
-
+        size_t pageWithTableRowSize = PAGE_SIZE + PG_TBL_ROW_SIZE;
         size_t threadsMemorySize = divSize * THREADS_MEMORY_WEIGHT;
+        size_t numSwapPages = SWAP_SIZE / PAGE_SIZE;
+        // size_t swapPageTableSize = numSwapPages * PG_TBL_ROW_SIZE;
+        size_t numMemPages = (threadsMemorySize - numSwapPages) / pageWithTableRowSize;
+        // size_t memPageTableSize = numMemPages * PG_TBL_ROW_SIZE;
+        size_t numPages = numSwapPages + numMemPages;
+        // size_t pageTableSize = swapPageTableSize + memPageTableSize;
+        threadsMemorySize = numMemPages * PAGE_SIZE;
         size_t libraryMemorySize = spaceLeft - threadsMemorySize;
 
+        // Setting memory's metadata
         memoryInfo->libraryMemory = createPartition(memoryInfo + 1, libraryMemorySize);
-        memoryInfo->threadsMemory = CHAR_PTR(memoryInfo->libraryMemory.lastTail + 1);
+        memoryInfo->sharedMemory = createPartition(memory + MEM_META_SIZE + spaceLeft, SHRD_MEM_SIZE);
+        memoryInfo->swapfile = open("swapfile", O_CREAT|O_RDWR|O_TRUNC);
+        memoryInfo->pageTable = PG_TBL_ROW_PTR(memory + MEM_META_SIZE + libraryMemorySize);
+        memoryInfo->numPages = numPages;
+
+        // Initializing page table
+        char * memPages = CHAR_PTR(memoryInfo->pageTable + numPages);
+        off_t i;
+        for (i = 0; i < numMemPages; i++) {
+            memoryInfo->pageTable[i].thread = NULL;
+            memoryInfo->pageTable[i].pysicalLocation = memPages + (i * PAGE_SIZE);
+            memoryInfo->pageTable[i].virtualLocation = -1;
+        }
+        off_t j;
+        for (j = 0; j < numSwapPages; j++) {
+            memoryInfo->pageTable[i].thread = NULL;
+            memoryInfo->pageTable[i].pysicalLocation = NULL;
+            memoryInfo->pageTable[i].virtualLocation = j;
+            i++;
+        }  
     }
+
+    struct memoryMetadata * memoryInfo = MEM_META_PTR(memory);
 
     if (request == LIBRARYREQ) {
         return allocateFrom(size, &(memoryInfo->libraryMemory));
 
     } else if (request == THREADREQ) {
 
-        char * threadsMemory;
-        for (
-            threadsMemory = memoryInfo->threadsMemory;
-            threadsMemory <= (memory + MEM_SIZE - PAGE_SIZE);
-            threadsMemory += PAGE_SIZE
+        // char * threadsMemory;
+        // for (
+        //     threadsMemory = memoryInfo->threadsMemory;
+        //     threadsMemory <= (memory + MEM_SIZE - PAGE_SIZE);
+        //     threadsMemory += PAGE_SIZE
 
-        ) {     
-            struct pageMetadata * threadPage = PAGE_META_PTR(threadsMemory);
-            if (!(threadPage->thread)) {
-                initializePage(threadPage, currentTcb);
-                return allocateFrom(size, &(threadPage->partition));
-            } else if (currentTcb == threadPage->thread) {
-                return allocateFrom(size, &(threadPage->partition));
-            }
-        }
+        // ) {     
+        //     struct pageMetadata * threadPage = PAGE_META_PTR(threadsMemory);
+        //     if (!(threadPage->thread)) {
+        //         initializePage(threadPage, currentTcb);
+        //         return allocateFrom(size, &(threadPage->partition));
+        //     } else if (currentTcb == threadPage->thread) {
+        //         return allocateFrom(size, &(threadPage->partition));
+        //     }
+        // }
 
         return 0;
 
@@ -201,7 +251,7 @@ void deallocateFrom(void * ptr, struct memoryPartition * partition) {
 
 // Frees memory refrenced by ptr that was previously allocated with myallocate
 void mydeallocate(void * ptr, char * fileName, int lineNumber, int request) {
-    struct memoryMetadata * memoryInfo = MEM_META_PTR(memory);
-    if (request == LIBRARYREQ) { deallocateFrom(ptr, &(memoryInfo->libraryMemory)); }
-    else if (request == THREADREQ) { deallocateFrom(ptr, &(memoryInfo->threadsMemory)); }
+    // struct memoryMetadata * memoryInfo = MEM_META_PTR(memory);
+    // if (request == LIBRARYREQ) { deallocateFrom(ptr, &(memoryInfo->libraryMemory)); }
+    // else if (request == THREADREQ) { deallocateFrom(ptr, &(memoryInfo->threadsMemory)); }
 }
