@@ -156,7 +156,6 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
 
         // Allocating space
         memory = memalign(PAGE_SIZE, MEM_SIZE);
-        struct memoryMetadata * memoryInfo = MEM_META_PTR(memory);
         
         // Calculating temporary numbers
         size_t libPlusThreadsSpace = MEM_SIZE - MEM_META_SIZE - SHRD_MEM_SIZE;
@@ -180,34 +179,32 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
         }
 
         // Setting memory's metadata
-        memoryInfo->libraryMemory = createPartition(memoryInfo + 1, libraryMemorySize);
-        memoryInfo->sharedMemory = createPartition(memory + MEM_META_SIZE + libPlusThreadsSpace, SHRD_MEM_SIZE);
-        memoryInfo->swapfile = open("swapfile", O_CREAT|O_RDWR|O_TRUNC);
-        memoryInfo->pageTable = PG_TBL_ROW_PTR(memory + MEM_META_SIZE + libraryMemorySize);
-        memoryInfo->numPages = numPages;
+        LIB_MEM_PART = createPartition(MEM_INFO + 1, libraryMemorySize);
+        SHRD_MEM_PART = createPartition(memory + MEM_META_SIZE + libPlusThreadsSpace, SHRD_MEM_SIZE);
+        SWAP_FILE = open("swapfile", O_CREAT|O_RDWR|O_TRUNC);
+        PG_TBL = PG_TBL_ROW_PTR(memory + MEM_META_SIZE + libraryMemorySize);
+        NUM_PGS = numPages;
 
         // Initializing page table
-        char * memPages = CHAR_PTR(memoryInfo->pageTable + numPages);
+        char * memPages = CHAR_PTR(PG_TBL + numPages);
         off_t i;
         for (i = 0; i < numMemPages; i++) {
-            memoryInfo->pageTable[i].thread = NULL;
-            memoryInfo->pageTable[i].pysicalLocation = memPages + (i * PAGE_SIZE);
-            memoryInfo->pageTable[i].virtualLocation = -1;
+            PG_TBL[i].thread = NULL;
+            PG_TBL[i].pysicalLocation = memPages + (i * PAGE_SIZE);
+            PG_TBL[i].virtualLocation = -1;
         }
         off_t j;
         for (j = 0; j < numSwapPages; j++) {
-            memoryInfo->pageTable[i].thread = NULL;
-            memoryInfo->pageTable[i].pysicalLocation = NULL;
-            memoryInfo->pageTable[i].virtualLocation = j;
+            PG_TBL[i].thread = NULL;
+            PG_TBL[i].pysicalLocation = NULL;
+            PG_TBL[i].virtualLocation = j;
             i++;
         }
         mprotect(memPages, numMemPages * PAGE_SIZE, PROT_NONE);
     }
 
-    struct memoryMetadata * memoryInfo = MEM_META_PTR(memory);
-
     if (request == LIBRARYREQ) {
-        return allocateFrom(size, &(memoryInfo->libraryMemory));
+        return allocateFrom(size, &LIB_MEM_PART);
 
     } else if (request == THREADREQ) {
 
