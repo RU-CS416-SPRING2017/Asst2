@@ -27,8 +27,9 @@
 #define LIB_MEM_PART (MEM_INFO->libraryMemory)
 #define PG_TBL (MEM_INFO->pageTable)
 #define NUM_PGS (MEM_INFO->numPages)
-#define SHRD_MEM_PART (MEM_INFO->sharedMemory)
+#define MEM_PGS CHAR_PTR(PG_TBL + NUM_PGS)
 #define SWAP_FILE (MEM_INFO->swapfile)
+#define SHRD_MEM_PART (MEM_INFO->sharedMemory)
 
 // These macros determine how much of memory should
 // be partitioned for the thread library vs threads
@@ -61,8 +62,8 @@ struct memoryMetadata {
     struct memoryPartition libraryMemory;
     struct pageTableRow * pageTable;
     size_t numPages;
-    struct memoryPartition sharedMemory;
     int swapfile;
+    struct memoryPartition sharedMemory;
 };
 
 // "Main memory"
@@ -186,21 +187,20 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
         NUM_PGS = numPages;
 
         // Initializing page table
-        char * memPages = CHAR_PTR(PG_TBL + numPages);
         off_t i;
         for (i = 0; i < numMemPages; i++) {
             PG_TBL[i].thread = NULL;
-            PG_TBL[i].pysicalLocation = memPages + (i * PAGE_SIZE);
+            PG_TBL[i].pysicalLocation = MEM_PGS + (i * PAGE_SIZE);
             PG_TBL[i].virtualLocation = -1;
         }
         off_t j;
-        for (j = 0; j < numSwapPages; j++) {
+        for (j = 0; j < numSwapPages; j += PAGE_SIZE) {
             PG_TBL[i].thread = NULL;
             PG_TBL[i].pysicalLocation = NULL;
             PG_TBL[i].virtualLocation = j;
             i++;
         }
-        mprotect(memPages, numMemPages * PAGE_SIZE, PROT_NONE);
+        mprotect(MEM_PGS, numMemPages * PAGE_SIZE, PROT_NONE);
     }
 
     if (request == LIBRARYREQ) {
