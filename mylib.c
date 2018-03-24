@@ -1,7 +1,7 @@
 #include <malloc.h>
-#include "my_pthread_t.h"
 #include <sys/mman.h>
 #include <fcntl.h>
+#include "my_pthread_t.h"
 
 // Size macros
 #define MEM_SIZE (8 * 1000 * 1000)
