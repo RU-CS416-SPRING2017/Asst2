@@ -149,27 +149,33 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
         // Allocating space
         memory = memalign(PAGE_SIZE, MEM_SIZE);
         mprotect(memory, MEM_SIZE, PROT_NONE);
-        // mprotect(memory, MEM_SIZE, PROT_WRITE|PROT_READ);
+        mprotect(memory, MEM_SIZE, PROT_WRITE|PROT_READ);
         struct memoryMetadata * memoryInfo = MEM_META_PTR(memory);
         
         // Calculating temporary numbers
-        size_t spaceLeft = MEM_SIZE - MEM_META_SIZE - SHRD_MEM_SIZE;
+        size_t libPlusThreadsSpace = MEM_SIZE - MEM_META_SIZE - SHRD_MEM_SIZE;
         size_t numDiv = LIBRARY_MEMORY_WEIGHT + THREADS_MEMORY_WEIGHT;
-        size_t divSize = spaceLeft / numDiv;
+        size_t divSize = libPlusThreadsSpace / numDiv;
         size_t pageWithTableRowSize = PAGE_SIZE + PG_TBL_ROW_SIZE;
         size_t threadsMemorySize = divSize * THREADS_MEMORY_WEIGHT;
+        size_t libraryMemorySize = libPlusThreadsSpace - threadsMemorySize;
         size_t numSwapPages = SWAP_SIZE / PAGE_SIZE;
-        // size_t swapPageTableSize = numSwapPages * PG_TBL_ROW_SIZE;
-        size_t numMemPages = (threadsMemorySize - numSwapPages) / pageWithTableRowSize;
-        // size_t memPageTableSize = numMemPages * PG_TBL_ROW_SIZE;
+        size_t memPgPlusMemTblSpace = threadsMemorySize - (numSwapPages * PG_TBL_ROW_SIZE);
+        size_t numMemPages = memPgPlusMemTblSpace / pageWithTableRowSize;
         size_t numPages = numSwapPages + numMemPages;
-        // size_t pageTableSize = swapPageTableSize + memPageTableSize;
-        threadsMemorySize = numMemPages * PAGE_SIZE;
-        size_t libraryMemorySize = spaceLeft - threadsMemorySize;
+        size_t pageTableSize = numPages * PG_TBL_ROW_SIZE;
+        while ((MEM_META_SIZE + libraryMemorySize + pageTableSize) % PAGE_SIZE) {
+            libraryMemorySize--;
+            threadsMemorySize = libPlusThreadsSpace - libraryMemorySize;
+            memPgPlusMemTblSpace = threadsMemorySize - (numSwapPages * PG_TBL_ROW_SIZE);
+            numMemPages = memPgPlusMemTblSpace / pageWithTableRowSize;
+            numPages = numSwapPages + numMemPages;
+            pageTableSize = numPages * PG_TBL_ROW_SIZE;
+        }
 
         // Setting memory's metadata
         memoryInfo->libraryMemory = createPartition(memoryInfo + 1, libraryMemorySize);
-        memoryInfo->sharedMemory = createPartition(memory + MEM_META_SIZE + spaceLeft, SHRD_MEM_SIZE);
+        memoryInfo->sharedMemory = createPartition(memory + MEM_META_SIZE + libPlusThreadsSpace, SHRD_MEM_SIZE);
         memoryInfo->swapfile = open("swapfile", O_CREAT|O_RDWR|O_TRUNC);
         memoryInfo->pageTable = PG_TBL_ROW_PTR(memory + MEM_META_SIZE + libraryMemorySize);
         memoryInfo->numPages = numPages;
