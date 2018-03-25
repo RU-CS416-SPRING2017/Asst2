@@ -209,13 +209,18 @@ void swapPages(struct pageTableRow * row1, struct pageTableRow * row2) {
 
         // Swap the tcbs of both threads
         tcb * tempTcb = row1->thread;
+        unsigned int tempPageNumber;
         row1->thread = row2->thread;
         row2->thread = tempTcb;
+        tempPageNumber = row1->pageNumber;
+        row1->pageNumber = row2->pageNumber;
+        row2->pageNumber = tempPageNumber;
     }
 }
 
 void onAccess(int sig, siginfo_t * si, void * unused) {
-    struct pageTableRow * rows[NUM_PGS];
+    UNPROTECT(MEM_PGS, NUM_MEM_PGS);
+    struct pageTableRow ** rows = calloc(NUM_PGS, sizeof(struct pageTableRow *));
     size_t numPages = 0;
     struct pageTableRow * firstFreePage = NULL;
     size_t i;
@@ -227,10 +232,10 @@ void onAccess(int sig, siginfo_t * si, void * unused) {
             firstFreePage = PG_TBL + i;
         }
     }
-    UNPROTECT(MEM_PGS, NUM_PGS);
     if (!numPages) {
         if (firstFreePage) {
             firstFreePage->thread = currentTcb;
+            firstFreePage->pageNumber = 0;
             swapPages(firstFreePage, PG_TBL);
             THRD_MEM->partition = createPartition(THRD_MEM + 1, PAGE_SIZE - THRD_META_SIZE);
             PROTECT(CHAR_PTR(THRD_MEM) + PAGE_SIZE, NUM_MEM_PGS - 1);
@@ -244,6 +249,7 @@ void onAccess(int sig, siginfo_t * si, void * unused) {
         }
         PROTECT(CHAR_PTR(THRD_MEM) + (numPages * PAGE_SIZE), NUM_MEM_PGS - numPages);
     }
+    rows = realloc(rows, 0);
     // printf("Got SIGSEGV at address: 0x%lx\n",(long) si->si_addr);
     // exit(SIGSEGV);
 }
