@@ -10,7 +10,7 @@
 #define DBL_BLK_META_SIZE (BLK_META_SIZE * 2)
 #define MEM_META_SIZE sizeof(struct memoryMetadata)
 #define BLK_SIZE(payload) (payload + DBL_BLK_META_SIZE) // x is payload size of block
-#define PAGE_SIZE sysconf(_SC_PAGE_SIZE)
+// #define PAGE_SIZE sysconf(_SC_PAGE_SIZE)
 #define PG_TBL_ROW_SIZE sizeof(struct pageTableRow)
 #define SWAP_SIZE (MEM_SIZE * 2)
 #define SHRD_MEM_SIZE (PAGE_SIZE * 4)
@@ -24,6 +24,7 @@
 #define PAGE_META_PTR(x) ((struct pageMetadata *) (x))
 #define PG_TBL_ROW_PTR(x) ((struct pageTableRow *) (x))
 #define THRD_META_PTR(x) ((struct threadMemoryMetadata *) (x))
+#define UNSGND_LONG(x) ((unsigned long) (x))
 
 // Direct access macros
 #define MEM_INFO MEM_META_PTR(memory)
@@ -66,8 +67,8 @@ struct memoryPartition {
 // Repressents a row in the page table
 struct pageTableRow {
     tcb * thread;
-    unsigned int pageNumber;
-    void * pysicalLocation;
+    unsigned long pageNumber;
+    void * physicalLocation;
     off_t virtualLocation;
 };
 
@@ -88,6 +89,7 @@ struct memoryMetadata {
 
 // "Main memory"
 char * memory = NULL;
+long PAGE_SIZE;
 
 // Returns the tail of a block whose initialized head is given
 struct blockMetadata * getTail(struct blockMetadata * head) {
@@ -168,34 +170,54 @@ void * allocateFrom(size_t size, struct memoryPartition * partition) {
     return head + 1;
 }
 
+// Protects all (mem) pages of the given thread
+void protectAllPages(tcb * thread) {
+    off_t i;
+    for (i = 0; i < NUM_MEM_PGS; i++) {
+        if (PG_TBL[i].thread == thread) {
+            PROTECT(PG_TBL[i].physicalLocation, 1);
+        }
+    }
+}
+
+// Unprotects all (mem) pages of the given thread
+void unprotectAllPages(tcb * thread) {
+    off_t i;
+    for (i = 0; i < NUM_MEM_PGS; i++) {
+        if (PG_TBL[i].thread == thread) {
+            UNPROTECT(PG_TBL[i].physicalLocation, 1);
+        }
+    }
+}
+
 // Swaps the 2 pages
 void swapPages(struct pageTableRow * row1, struct pageTableRow * row2) {
 
     if (row1 != row2) {
 
-        char temp[PAGE_SIZE];
+        char * temp = calloc(PAGE_SIZE, 1);
 
         // Copy row1 into temp
-        if (row1->pysicalLocation) {
-            COPY_PAGE(temp, row1->pysicalLocation);
+        if (row1->physicalLocation) {
+            COPY_PAGE(temp, row1->physicalLocation);
         } else {
             SEEK_SWAP_FILE(row1->virtualLocation);
             READ_SWAP_PAGE(temp);
         }
 
         // Copy row2 into row1 and temp into row2
-        if (row2->pysicalLocation) {
-            if (row1->pysicalLocation) {
-                COPY_PAGE(row1->pysicalLocation, row2->pysicalLocation);
+        if (row2->physicalLocation) {
+            if (row1->physicalLocation) {
+                COPY_PAGE(row1->physicalLocation, row2->physicalLocation);
             } else {
                 SEEK_SWAP_FILE(row1->virtualLocation);
-                WRITE_SWAP_PAGE(row2->pysicalLocation);
+                WRITE_SWAP_PAGE(row2->physicalLocation);
             }
-            COPY_PAGE(row2->pysicalLocation, temp);
+            COPY_PAGE(row2->physicalLocation, temp);
         } else {
-            if (row1->pysicalLocation) {
+            if (row1->physicalLocation) {
                 SEEK_SWAP_FILE(row2->virtualLocation);
-                READ_SWAP_PAGE(row1->pysicalLocation);
+                READ_SWAP_PAGE(row1->physicalLocation);
             } else {
                 char temp2[PAGE_SIZE];
                 SEEK_SWAP_FILE(row2->virtualLocation);
@@ -209,53 +231,51 @@ void swapPages(struct pageTableRow * row1, struct pageTableRow * row2) {
 
         // Swap the tcbs of both threads
         tcb * tempTcb = row1->thread;
-        unsigned int tempPageNumber;
         row1->thread = row2->thread;
         row2->thread = tempTcb;
-        tempPageNumber = row1->pageNumber;
+        unsigned long tempPageNumber = row1->pageNumber;
         row1->pageNumber = row2->pageNumber;
         row2->pageNumber = tempPageNumber;
     }
 }
 
 void onAccess(int sig, siginfo_t * si, void * unused) {
-    UNPROTECT(MEM_PGS, NUM_MEM_PGS);
-    struct pageTableRow ** rows = calloc(NUM_PGS, sizeof(struct pageTableRow *));
-    size_t numPages = 0;
-    struct pageTableRow * firstFreePage = NULL;
-    size_t i;
+
+    unsigned long offset = UNSGND_LONG(si->si_addr) - UNSGND_LONG(MEM_PGS);
+    unsigned long pageNumber = offset / PAGE_SIZE;
+    struct pageTableRow * pageAccessed = PG_TBL + pageNumber;
+    struct pageTableRow * pageWanted = NULL;
+    int new = 0;
+
+    unsigned long i;
     for (i = 0; i < NUM_PGS; i++) {
-        if (currentTcb == PG_TBL[i].thread) {
-            rows[PG_TBL[i].pageNumber] = PG_TBL + i;
-            numPages++;
-        } else if (numPages == 0 && !firstFreePage && !(PG_TBL[i].thread)) {
-            firstFreePage = PG_TBL + i;
+        if (PG_TBL[i].thread == currentTcb && PG_TBL[i].pageNumber == pageNumber) {
+            pageWanted = PG_TBL + i;
+            new = 0;
+            break;
+        } else if (!pageWanted && !PG_TBL[i].thread) {
+            pageWanted = PG_TBL + i;
+            UNPROTECT(pageWanted->physicalLocation, 1);
+            new = 1;
         }
     }
-    if (!numPages) {
-        if (firstFreePage) {
-            firstFreePage->thread = currentTcb;
-            firstFreePage->pageNumber = 0;
-            swapPages(firstFreePage, PG_TBL);
-            THRD_MEM->partition = createPartition(THRD_MEM + 1, PAGE_SIZE - THRD_META_SIZE);
-            PROTECT(CHAR_PTR(THRD_MEM) + PAGE_SIZE, NUM_MEM_PGS - 1);
-        } else {
-            // Handle no room at all
-        }
-    } else {
-        off_t i;
-        for (i = 0; i < numPages; i++) {
-            swapPages(rows[i], PG_TBL + i);
-        }
-        PROTECT(CHAR_PTR(THRD_MEM) + (numPages * PAGE_SIZE), NUM_MEM_PGS - numPages);
-    }
-    rows = realloc(rows, 0);
-    // printf("Got SIGSEGV at address: 0x%lx\n",(long) si->si_addr);
-    // exit(SIGSEGV);
+
+    UNPROTECT(pageAccessed->physicalLocation, 1);
+    swapPages(pageAccessed, pageWanted);
+    PROTECT(PG_TBL[i].physicalLocation, 1);
+
+    if (new) {
+        pageAccessed->thread = currentTcb;
+        pageAccessed->pageNumber = 0;
+        struct threadMemoryMetadata * threadMeta = THRD_META_PTR(pageAccessed->physicalLocation);
+        threadMeta->partition = createPartition(threadMeta + 1, PAGE_SIZE - THRD_META_SIZE);
+    }  
 }
 
 // Allocates size bytes in memory and returns a pointer to it
 void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
+
+    PAGE_SIZE = sysconf(_SC_PAGE_SIZE);
 
     // If memory is null, initialize it
     if (!memory) {
@@ -306,13 +326,13 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
         off_t i;
         for (i = 0; i < numMemPages; i++) {
             PG_TBL[i].thread = NULL;
-            PG_TBL[i].pysicalLocation = MEM_PGS + (i * PAGE_SIZE);
+            PG_TBL[i].physicalLocation = MEM_PGS + (i * PAGE_SIZE);
             PG_TBL[i].virtualLocation = -1;
         }
         off_t j;
         for (j = 0; j < numSwapPages; j += PAGE_SIZE) {
             PG_TBL[i].thread = NULL;
-            PG_TBL[i].pysicalLocation = NULL;
+            PG_TBL[i].physicalLocation = NULL;
             PG_TBL[i].virtualLocation = j;
             i++;
         }

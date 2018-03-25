@@ -27,6 +27,10 @@
 #define malloc(x) myallocate(x, __FILE__, __LINE__, LIBRARYREQ)
 #define free(x) mydeallocate(x, __FILE__, __LINE__, LIBRARYREQ)
 
+// Function from mylib.c for comunication
+void protectAllPages(tcb * thread);
+void unprotectAllPages(tcb * thread);
+
 // Checks if library is properly initialized
 char initialized = 0;
 // Exit context
@@ -172,6 +176,7 @@ void schedule(int signum) {
 				if (previousTcb == NULL) { 
 					gettimeofday(&(currentTcb->start), NULL);
 					block = 0;
+					unprotectAllPages(currentTcb);
 					setcontext(&(currentTcb->context));
 
 				} else {
@@ -187,6 +192,8 @@ void schedule(int signum) {
 					enqueue(previousTcb, &(PQs[previousTcb->priorityLevel].queue));
 					gettimeofday(&(currentTcb->start), NULL);
 					block = 0;
+					protectAllPages(previousTcb);
+					unprotectAllPages(currentTcb);
 					swapcontext(&(previousTcb->context), &(currentTcb->context));
 				}
 		
@@ -264,6 +271,8 @@ int my_pthread_yield() {
 		gettimeofday(&(currentTcb->start), NULL);
 		enqueue(previousTcb, &(PQs[previousTcb->priorityLevel].queue));
 		block = 0;
+		protectAllPages(previousTcb);
+		unprotectAllPages(currentTcb);
 		swapcontext(&(previousTcb->context), &(currentTcb->context));
 	}
 
@@ -289,6 +298,7 @@ void my_pthread_exit(void *value_ptr) {
 		enqueue(currentTcb->waiter, &(PQs[0].queue));
 	}
 
+	protectAllPages(currentTcb);
 	currentTcb = NULL;
 
 	block = 0;
@@ -313,6 +323,8 @@ int my_pthread_join(my_pthread_t thread, void **value_ptr) {
 		currentTcb = getNextTcb();
 		gettimeofday(&(currentTcb->start), NULL);
 		block = 0;
+		protectAllPages(joining->waiter);
+		unprotectAllPages(currentTcb);
 		swapcontext(&(joining->waiter->context), &(currentTcb->context));
 	}
 
@@ -362,6 +374,8 @@ int my_pthread_mutex_lock(my_pthread_mutex_t *mutex) {
 
 		gettimeofday(&(currentTcb->start), NULL);
 		block = 0;
+		protectAllPages(previousTcb);
+		unprotectAllPages(currentTcb);
 		swapcontext(&(previousTcb->context), &(currentTcb->context));
 
 	} else {

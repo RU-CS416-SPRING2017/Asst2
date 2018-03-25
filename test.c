@@ -18,7 +18,7 @@ void * test2(void * nun) {
 
 int main() {
 
-    my_pthread_t t, t2;
+    pthread_t t, t2;
     pthread_create(&t, NULL, test, NULL);
     pthread_create(&t2, NULL, test2, NULL);
     printf("in main\n");
