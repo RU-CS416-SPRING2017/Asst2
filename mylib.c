@@ -1,6 +1,7 @@
 #include <malloc.h>
 #include <sys/mman.h>
 #include <fcntl.h>
+#include <string.h>
 #include "my_pthread_t.h"
 
 // Size macros
@@ -8,11 +9,12 @@
 #define BLK_META_SIZE sizeof(struct blockMetadata)
 #define DBL_BLK_META_SIZE (BLK_META_SIZE * 2)
 #define MEM_META_SIZE sizeof(struct memoryMetadata)
-#define BLK_SIZE(x) (x + DBL_BLK_META_SIZE) // x is payload size of block
+#define BLK_SIZE(payload) (payload + DBL_BLK_META_SIZE) // x is payload size of block
 #define PAGE_SIZE sysconf(_SC_PAGE_SIZE)
 #define PG_TBL_ROW_SIZE sizeof(struct pageTableRow)
 #define SWAP_SIZE (MEM_SIZE * 2)
 #define SHRD_MEM_SIZE (PAGE_SIZE * 4)
+#define THRD_META_SIZE sizeof(struct threadMemoryMetadata)
 
 // Casting macros
 #define VOID_PTR(x) ((void *) (x))
@@ -27,11 +29,21 @@
 #define MEM_INFO MEM_META_PTR(memory)
 #define LIB_MEM_PART (MEM_INFO->libraryMemory)
 #define PG_TBL (MEM_INFO->pageTable)
+#define NUM_MEM_PGS (MEM_INFO->numMemPages)
+#define NUM_SWAP_PGS (MEM_INFO->numPages - MEM_INFO->numMemPages)
 #define NUM_PGS (MEM_INFO->numPages)
 #define MEM_PGS CHAR_PTR(PG_TBL + NUM_PGS)
 #define SWAP_FILE (MEM_INFO->swapfile)
 #define SHRD_MEM_PART (MEM_INFO->sharedMemory)
 #define THRD_MEM (THRD_META_PTR(MEM_PGS))
+
+// Shorthand macros
+#define SEEK_SWAP_FILE(offset) lseek(SWAP_FILE, offset, SEEK_SET)
+#define READ_SWAP_PAGE(dest) read(SWAP_FILE, dest, PAGE_SIZE)
+#define WRITE_SWAP_PAGE(src) write(SWAP_FILE, src, PAGE_SIZE)
+#define COPY_PAGE(dest, page) memcpy(dest, page, PAGE_SIZE)
+#define PROTECT(startPage, numPages) mprotect(startPage, numPages * PAGE_SIZE, PROT_NONE)
+#define UNPROTECT(startPage, numPages) mprotect(startPage, numPages * PAGE_SIZE, PROT_READ|PROT_WRITE|PROT_EXEC)
 
 // These macros determine how much of memory should
 // be partitioned for the thread library vs threads
@@ -68,6 +80,7 @@ struct threadMemoryMetadata {
 struct memoryMetadata {
     struct memoryPartition libraryMemory;
     struct pageTableRow * pageTable;
+    size_t numMemPages;
     size_t numPages;
     int swapfile;
     struct memoryPartition sharedMemory;
@@ -155,9 +168,84 @@ void * allocateFrom(size_t size, struct memoryPartition * partition) {
     return head + 1;
 }
 
+// Swaps the 2 pages
+void swapPages(struct pageTableRow * row1, struct pageTableRow * row2) {
+
+    if (row1 != row2) {
+
+        char temp[PAGE_SIZE];
+
+        // Copy row1 into temp
+        if (row1->pysicalLocation) {
+            COPY_PAGE(temp, row1->pysicalLocation);
+        } else {
+            SEEK_SWAP_FILE(row1->virtualLocation);
+            READ_SWAP_PAGE(temp);
+        }
+
+        // Copy row2 into row1 and temp into row2
+        if (row2->pysicalLocation) {
+            if (row1->pysicalLocation) {
+                COPY_PAGE(row1->pysicalLocation, row2->pysicalLocation);
+            } else {
+                SEEK_SWAP_FILE(row1->virtualLocation);
+                WRITE_SWAP_PAGE(row2->pysicalLocation);
+            }
+            COPY_PAGE(row2->pysicalLocation, temp);
+        } else {
+            if (row1->pysicalLocation) {
+                SEEK_SWAP_FILE(row2->virtualLocation);
+                READ_SWAP_PAGE(row1->pysicalLocation);
+            } else {
+                char temp2[PAGE_SIZE];
+                SEEK_SWAP_FILE(row2->virtualLocation);
+                READ_SWAP_PAGE(temp2);
+                SEEK_SWAP_FILE(row1->virtualLocation);
+                WRITE_SWAP_PAGE(temp2);
+            }
+            SEEK_SWAP_FILE(row2->virtualLocation);
+            WRITE_SWAP_PAGE(temp);
+        }
+
+        // Swap the tcbs of both threads
+        tcb * tempTcb = row1->thread;
+        row1->thread = row2->thread;
+        row2->thread = tempTcb;
+    }
+}
+
 void onAccess(int sig, siginfo_t * si, void * unused) {
-    printf("Got SIGSEGV at address: 0x%lx\n",(long) si->si_addr);
-    exit(SIGSEGV);
+    struct pageTableRow * rows[NUM_PGS];
+    size_t numPages = 0;
+    struct pageTableRow * firstFreePage = NULL;
+    size_t i;
+    for (i = 0; i < NUM_PGS; i++) {
+        if (currentTcb == PG_TBL[i].thread) {
+            rows[PG_TBL[i].pageNumber] = PG_TBL + i;
+            numPages++;
+        } else if (numPages == 0 && !firstFreePage && !(PG_TBL[i].thread)) {
+            firstFreePage = PG_TBL + i;
+        }
+    }
+    UNPROTECT(MEM_PGS, NUM_PGS);
+    if (!numPages) {
+        if (firstFreePage) {
+            firstFreePage->thread = currentTcb;
+            swapPages(firstFreePage, PG_TBL);
+            THRD_MEM->partition = createPartition(THRD_MEM + 1, PAGE_SIZE - THRD_META_SIZE);
+            PROTECT(CHAR_PTR(THRD_MEM) + PAGE_SIZE, NUM_MEM_PGS - 1);
+        } else {
+            // Handle no room at all
+        }
+    } else {
+        off_t i;
+        for (i = 0; i < numPages; i++) {
+            swapPages(rows[i], PG_TBL + i);
+        }
+        PROTECT(CHAR_PTR(THRD_MEM) + (numPages * PAGE_SIZE), NUM_MEM_PGS - numPages);
+    }
+    // printf("Got SIGSEGV at address: 0x%lx\n",(long) si->si_addr);
+    // exit(SIGSEGV);
 }
 
 // Allocates size bytes in memory and returns a pointer to it
@@ -205,6 +293,7 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
         SHRD_MEM_PART = createPartition(memory + MEM_META_SIZE + libPlusThreadsSpace, SHRD_MEM_SIZE);
         SWAP_FILE = open("swapfile", O_CREAT|O_RDWR|O_TRUNC);
         PG_TBL = PG_TBL_ROW_PTR(memory + MEM_META_SIZE + libraryMemorySize);
+        NUM_MEM_PGS = numMemPages;
         NUM_PGS = numPages;
 
         // Initializing page table
@@ -221,14 +310,13 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
             PG_TBL[i].virtualLocation = j;
             i++;
         }
-        mprotect(MEM_PGS, numMemPages * PAGE_SIZE, PROT_NONE);
+        PROTECT(MEM_PGS, numMemPages);
     }
 
     if (request == LIBRARYREQ) {
         return allocateFrom(size, &LIB_MEM_PART);
 
     } else if (request == THREADREQ) {
-
         return allocateFrom(size, &(THRD_MEM->partition));
 
     } else { return NULL; }
