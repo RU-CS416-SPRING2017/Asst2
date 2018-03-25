@@ -9,7 +9,7 @@
 #define BLK_META_SIZE sizeof(struct blockMetadata)
 #define DBL_BLK_META_SIZE (BLK_META_SIZE * 2)
 #define MEM_META_SIZE sizeof(struct memoryMetadata)
-#define BLK_SIZE(payload) (payload + DBL_BLK_META_SIZE) // x is payload size of block
+#define BLK_SIZE(payloadSize) (payloadSize + DBL_BLK_META_SIZE)
 // #define PAGE_SIZE sysconf(_SC_PAGE_SIZE)
 #define PG_TBL_ROW_SIZE sizeof(struct pageTableRow)
 #define SWAP_SIZE (MEM_SIZE * 2)
@@ -195,7 +195,7 @@ void swapPages(struct pageTableRow * row1, struct pageTableRow * row2) {
 
     if (row1 != row2) {
 
-        char * temp = calloc(PAGE_SIZE, 1);
+        char temp[PAGE_SIZE];
 
         // Copy row1 into temp
         if (row1->physicalLocation) {
