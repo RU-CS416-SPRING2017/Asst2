@@ -348,7 +348,12 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
         return allocateFrom(size, &LIB_MEM_PART);
 
     } else if (request == THREADREQ) {
-        return allocateFrom(size, &(THRD_MEM->partition));
+        void * ret = allocateFrom(size, &(THRD_MEM->partition));
+        while (!ret) {
+            extendPartition(&(THRD_MEM->partition), PAGE_SIZE);
+            ret = allocateFrom(size, &(THRD_MEM->partition));
+        }
+        return ret;
 
     } else { return NULL; }
 }
