@@ -349,6 +349,25 @@ void initializeMemory() {
     }
 }
 
+// Returns 1 if thread can extend its pages
+// else returns 0
+int canExtend(tcb * thread) {
+    unsigned int numThreadPages;
+    unsigned int totalUsedPages;
+    unsigned int i;
+    for (i = 0; i < NUM_PGS; i++) {
+        if (PG_TBL[i].thread) {
+            totalUsedPages++;
+            if (PG_TBL[i].thread == thread) {
+                numThreadPages++;
+                if (numThreadPages == NUM_MEM_PGS) { return 0; }
+            }
+        }
+    }
+    if (totalUsedPages == NUM_PGS) { return 0; }
+    return 1;
+}
+
 // Allocates size bytes in memory and returns a pointer to it
 void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
 
@@ -365,13 +384,15 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
         block = 1;
 
         void * ret = allocateFrom(size, &(THRD_MEM->partition));
-        while (!ret) {
-            extendPartition(&(THRD_MEM->partition), PAGE_SIZE);
-            ret = allocateFrom(size, &(THRD_MEM->partition));
+        if (canExtend(currentTcb)) {
+            while (!ret) {
+                extendPartition(&(THRD_MEM->partition), PAGE_SIZE);
+                ret = allocateFrom(size, &(THRD_MEM->partition));
+            }
         }
 
         block = 0;
-        return ret;
+        return ret;        
 
     } else { return NULL; }
 }
