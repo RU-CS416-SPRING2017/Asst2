@@ -90,6 +90,7 @@ struct memoryMetadata {
 // "Main memory"
 char * memory = NULL;
 long PAGE_SIZE;
+extern char block;
 
 // Returns the tail of a block whose initialized head is given
 struct blockMetadata * getTail(struct blockMetadata * head) {
@@ -308,7 +309,7 @@ void initializeMemory() {
     // Setting memory's metadata
     LIB_MEM_PART = createPartition(MEM_INFO + 1, libraryMemorySize);
     SHRD_MEM_PART = createPartition(memory + MEM_SIZE - SHRD_MEM_SIZE, SHRD_MEM_SIZE);
-    SWAP_FILE = open("swapfile", O_CREAT|O_RDWR|O_TRUNC, S_IRWXU);
+    SWAP_FILE = open("swapfile", O_CREAT|O_RDWR|O_TRUNC, S_IRUSR|S_IWUSR);
     PG_TBL = PG_TBL_ROW_PTR(memory + MEM_META_SIZE + libraryMemorySize);
     NUM_MEM_PGS = numMemPages;
     NUM_SWAP_PGS = numSwapPages;
@@ -353,11 +354,17 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
         return allocateFrom(size, &LIB_MEM_PART);
 
     } else if (request == THREADREQ) {
+
+        block = 1;
+
         void * ret = allocateFrom(size, &(THRD_MEM->partition));
         while (!ret) {
             extendPartition(&(THRD_MEM->partition), PAGE_SIZE);
             ret = allocateFrom(size, &(THRD_MEM->partition));
         }
+
+        block = 0;
+
         return ret;
 
     } else { return NULL; }
@@ -365,7 +372,10 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
 
 // Returns a shared regiion of memory
 void * shalloc(size_t size) {
-    return allocateFrom(size, &SHRD_MEM_PART);
+    block = 1;
+    void * ret = allocateFrom(size, &SHRD_MEM_PART);
+    block = 0;
+    return ret;
 }
 
 // Deallocates a block between firstHead and lastTail where the payload is refrenced by ptr
