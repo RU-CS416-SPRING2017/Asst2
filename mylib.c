@@ -278,6 +278,10 @@ void onBadAccess(int sig, siginfo_t * si, void * unused) {
     }  
 }
 
+void cleanup() {
+    close(SWAP_FILE);
+}
+
 void initializeMemory() {
 
     PAGE_SIZE = sysconf(_SC_PAGE_SIZE);
@@ -309,10 +313,13 @@ void initializeMemory() {
     // Setting memory's metadata
     LIB_MEM_PART = createPartition(MEM_INFO + 1, libraryMemorySize);
     SHRD_MEM_PART = createPartition(memory + MEM_SIZE - SHRD_MEM_SIZE, SHRD_MEM_SIZE);
-    SWAP_FILE = open("swapfile", O_CREAT|O_RDWR|O_TRUNC, S_IRUSR|S_IWUSR);
     PG_TBL = PG_TBL_ROW_PTR(memory + MEM_META_SIZE + libraryMemorySize);
     NUM_MEM_PGS = numMemPages;
     NUM_SWAP_PGS = numSwapPages;
+    SWAP_FILE = open("swapfile", O_CREAT|O_RDWR|O_TRUNC, S_IRUSR|S_IWUSR);
+
+    // Fire cleanup when program exits
+    atexit(cleanup);
 
     // Initializing page table
     off_t i;
@@ -364,7 +371,6 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
         }
 
         block = 0;
-
         return ret;
 
     } else { return NULL; }
@@ -372,6 +378,12 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
 
 // Returns a shared regiion of memory
 void * shalloc(size_t size) {
+
+    // If memory is null, initialize it
+    if (!memory) {
+        initializeMemory();
+    }
+
     block = 1;
     void * ret = allocateFrom(size, &SHRD_MEM_PART);
     block = 0;
