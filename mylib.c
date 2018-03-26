@@ -1,4 +1,4 @@
-#include <malloc.h>
+// #include <malloc.h>
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <string.h>
@@ -307,7 +307,7 @@ void initializeMemory() {
 
     // Setting memory's metadata
     LIB_MEM_PART = createPartition(MEM_INFO + 1, libraryMemorySize);
-    SHRD_MEM_PART = createPartition(memory + MEM_META_SIZE + libPlusThreadsSpace, SHRD_MEM_SIZE);
+    SHRD_MEM_PART = createPartition(MEM_SIZE - SHRD_MEM_SIZE, SHRD_MEM_SIZE);
     SWAP_FILE = open("swapfile", O_CREAT|O_RDWR|O_TRUNC, S_IRWXU);
     PG_TBL = PG_TBL_ROW_PTR(memory + MEM_META_SIZE + libraryMemorySize);
     NUM_MEM_PGS = numMemPages;
@@ -361,6 +361,11 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
         return ret;
 
     } else { return NULL; }
+}
+
+// Returns a shared regiion of memory
+void * shalloc(size_t size) {
+    return allocateFrom(size, &SHRD_MEM_PART);
 }
 
 // Deallocates a block between firstHead and lastTail where the payload is refrenced by ptr
