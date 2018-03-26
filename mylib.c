@@ -148,30 +148,6 @@ void extendPartition(struct memoryPartition * partition, size_t size) {
     }
 }
 
-// Allocates memory of size between firstHead and lastTail.
-// Returns 0 if no space available, else returns pointer
-// to allocated memory.
-void * allocateFrom(size_t size, struct memoryPartition * partition) {
-
-    struct blockMetadata * head = partition->firstHead;
-    
-    while (head->used || size > head->payloadSize) {
-        head = BLK_META_PTR(CHAR_PTR(head) + BLK_SIZE(head->payloadSize));
-        if ((head - 1) ==partition->lastTail) { return 0; }
-    }
-
-    if ((size + DBL_BLK_META_SIZE) >= head->payloadSize) {
-        setBlockUsed(head, 1);
-        return head + 1;
-    }
-
-    size_t nextPayloadSize = head->payloadSize - (size + DBL_BLK_META_SIZE);
-    setBlockMetadata(head, 1, size);
-    setBlockMetadata(getTail(head) + 1, 0, nextPayloadSize);
-
-    return head + 1;
-}
-
 // Protects all (mem) pages of the given thread
 void protectAllPages(tcb * thread) {
     off_t i;
@@ -371,6 +347,30 @@ int canExtend(tcb * thread) {
     }
     if (totalUsedPages == NUM_PGS) { return 0; }
     return 1;
+}
+
+// Allocates memory of size between firstHead and lastTail.
+// Returns 0 if no space available, else returns pointer
+// to allocated memory.
+void * allocateFrom(size_t size, struct memoryPartition * partition) {
+
+    struct blockMetadata * head = partition->firstHead;
+    
+    while (head->used || size > head->payloadSize) {
+        head = BLK_META_PTR(CHAR_PTR(head) + BLK_SIZE(head->payloadSize));
+        if ((head - 1) ==partition->lastTail) { return 0; }
+    }
+
+    if ((size + DBL_BLK_META_SIZE) >= head->payloadSize) {
+        setBlockUsed(head, 1);
+        return head + 1;
+    }
+
+    size_t nextPayloadSize = head->payloadSize - (size + DBL_BLK_META_SIZE);
+    setBlockMetadata(head, 1, size);
+    setBlockMetadata(getTail(head) + 1, 0, nextPayloadSize);
+
+    return head + 1;
 }
 
 // Allocates size bytes in memory and returns a pointer to it
