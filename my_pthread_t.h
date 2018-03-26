@@ -62,7 +62,7 @@ struct priorityQueue {
 };
 
 // Feel free to add your own auxiliary data structures
-extern tcb * currentTcb;
+
 
 /* Function Declarations: */
 
