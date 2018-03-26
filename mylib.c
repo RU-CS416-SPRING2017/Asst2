@@ -91,6 +91,7 @@ struct memoryMetadata {
 char * memory = NULL;
 long PAGE_SIZE;
 extern char block;
+extern tcb * currentTcb;
 
 // Returns the tail of a block whose initialized head is given
 struct blockMetadata * getTail(struct blockMetadata * head) {
@@ -397,6 +398,10 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
     } else { return NULL; }
 }
 
+void * threadAllocate(size_t size) {
+    return myallocate(size, __FILE__, __LINE__, THREADREQ);
+}
+
 // Returns a shared regiion of memory
 void * shalloc(size_t size) {
 
@@ -454,4 +459,8 @@ void mydeallocate(void * ptr, char * fileName, int lineNumber, int request) {
         }
         block = 0;
     }
+}
+
+void threadDeallocate(void * ptr) {
+    mydeallocate(ptr, __FILE__, __LINE__, THREADREQ);
 }

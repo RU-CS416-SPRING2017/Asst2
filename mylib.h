@@ -6,10 +6,11 @@
 #define THREADREQ 1
 #define LIBRARYREQ 0
 
-#define malloc(x) myallocate(x, __FILE__, __LINE__, THREADREQ)
-#define free(x) mydeallocate(x, __FILE__, __LINE__, THREADREQ)
+#define malloc(size) threadAllocate(size)
+#define free(ptr) threadDeallocate(ptr)
 
-void * myallocate(size_t size, char * fileName, int lineNumber, int request);
-void mydeallocate(void * ptr, char * fileName, int lineNumber, int request);
+void * threadAllocate(size_t size);
+void * shalloc(size_t size);
+void threadDeallocate(void * ptr);
 
 #endif

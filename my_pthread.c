@@ -28,6 +28,8 @@
 #define free(x) mydeallocate(x, __FILE__, __LINE__, LIBRARYREQ)
 
 // Function from mylib.c for comunication
+void * myallocate(size_t size, char * fileName, int lineNumber, int request);
+void mydeallocate(void * ptr, char * fileName, int lineNumber, int request);
 void protectAllPages(tcb * thread);
 void unprotectAllPages(tcb * thread);
 
