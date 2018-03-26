@@ -6,7 +6,7 @@ The "main memory", "RAM", or "pysical memory" is a `char` array referenced by `m
 
 A "partition" is a chunk of memory that consists of atleast one "block" of memory. If there is more than one "block" in a partition, the "blocks" must be contiguous.
 
-A "block" is a chunk of memory that consists of "head" metadata, a "payload", and "tail" metadata. "Head" and "tail" metadata are the same except "head" metadata resides in the first `sizeof(struct blockMetadata)` bytes of the "block" and "tail" metadata resides in the last `sizeof(sturct blockMetadata)` bytes. The "payload" resides inbetween the "head" and "tail" metadata. The first `sizeof(int)` bytes of the "head" and "tail" metadata tell if the "block" is used, and the rest of the meatadata tells the size of the payload.
+A "block" is a chunk of memory that consists of "head" metadata, a "payload", and "tail" metadata. "Head" and "tail" metadata are the same except "head" metadata resides in the first `sizeof(sturct blockMetadata)` bytes of the "block" and "tail" metadata resides in the last `sizeof(sturct blockMetadata)` bytes. The "payload" resides inbetween the "head" and "tail" metadata. The first `sizeof(int)` bytes of the "head" and "tail" metadata tell if the "block" is used, and the rest of the meatadata tells the size of the payload.
 
 ### `myallocate`
 
