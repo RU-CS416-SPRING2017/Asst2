@@ -322,6 +322,10 @@ void initializeMemory() {
     // Fire cleanup when program exits
     atexit(cleanup);
 
+    // Create 16MB swapfile
+    SEEK_SWAP_FILE(SWAP_SIZE - 1);
+    write(SWAP_FILE, "\0", 1);
+
     // Initializing page table
     off_t i;
     for (i = 0; i < numMemPages; i++) {
