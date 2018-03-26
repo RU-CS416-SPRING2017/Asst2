@@ -412,7 +412,8 @@ void * shalloc(size_t size) {
 }
 
 // Deallocates a block between firstHead and lastTail where the payload is refrenced by ptr
-void deallocateFrom(void * ptr, struct memoryPartition * partition) {
+// returns 1 if succesfull and 0 otherwise
+int deallocateFrom(void * ptr, struct memoryPartition * partition) {
 
     if (ptr >= VOID_PTR(partition->firstHead + 1) && ptr < VOID_PTR(partition->lastTail)) {
 
@@ -438,12 +439,19 @@ void deallocateFrom(void * ptr, struct memoryPartition * partition) {
         }
 
         setBlockUsed(head, 0);
-    }
+        return 1;
+
+    } else { return 0; }
 }
 
 // Frees memory refrenced by ptr that was previously allocated with myallocate
 void mydeallocate(void * ptr, char * fileName, int lineNumber, int request) {
-    // struct memoryMetadata * memoryInfo = MEM_META_PTR(memory);
-    // if (request == LIBRARYREQ) { deallocateFrom(ptr, &(memoryInfo->libraryMemory)); }
-    // else if (request == THREADREQ) { deallocateFrom(ptr, &(memoryInfo->threadsMemory)); }
+    if (request == LIBRARYREQ) { deallocateFrom(ptr, &LIB_MEM_PART); }
+    else if (request == THREADREQ) {
+        block = 1;
+        if (!deallocateFrom(ptr, &(THRD_MEM->partition))) {
+            deallocateFrom(ptr, &SHRD_MEM_PART);
+        }
+        block = 0;
+    }
 }

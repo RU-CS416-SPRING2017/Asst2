@@ -3,7 +3,10 @@
 void * test(void * nun) {
     char * some = malloc(4096 * 800);
     sprintf(some, "in test");
-    // char * some = "in some";
+    printf("%s\n", some);
+    free(some);
+    malloc(40);
+    sprintf(some, "in test1");
     printf("%s\n", some);
     return NULL;
 }
@@ -11,8 +14,8 @@ void * test(void * nun) {
 void * test2(void * nun) {
     char * some = malloc(4096 * 800);
     sprintf(some, "in test2");
-    // char * some = "in some";
     printf("%s\n", some);
+    free(some);
     return NULL;
 }
 
