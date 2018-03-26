@@ -1,4 +1,4 @@
-// #include <malloc.h>
+#include <malloc.h>
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <string.h>
