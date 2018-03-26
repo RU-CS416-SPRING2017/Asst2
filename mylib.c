@@ -245,30 +245,35 @@ void onAccess(int sig, siginfo_t * si, void * unused) {
     unsigned long pageNumber = offset / PAGE_SIZE;
     struct pageTableRow * pageAccessed = PG_TBL + pageNumber;
     struct pageTableRow * pageWanted = NULL;
-    int new = 0;
+    struct pageTableRow * firstFreePage = NULL;
 
     unsigned long i;
     for (i = 0; i < NUM_PGS; i++) {
         if (PG_TBL[i].thread == currentTcb && PG_TBL[i].pageNumber == pageNumber) {
             pageWanted = PG_TBL + i;
-            new = 0;
             break;
-        } else if (!pageWanted && !PG_TBL[i].thread) {
-            pageWanted = PG_TBL + i;
-            UNPROTECT(pageWanted->physicalLocation, 1);
-            new = 1;
+        } else if (!firstFreePage && !PG_TBL[i].thread) {
+            firstFreePage = PG_TBL + i;
         }
     }
 
-    UNPROTECT(pageAccessed->physicalLocation, 1);
-    swapPages(pageAccessed, pageWanted);
-    PROTECT(PG_TBL[i].physicalLocation, 1);
-
-    if (new) {
+    if (pageWanted) {
+        UNPROTECT(pageAccessed->physicalLocation, 1);
+        swapPages(pageAccessed, pageWanted);
+        PROTECT(pageWanted->physicalLocation, 1);
+    } else if (firstFreePage) {
+        if (firstFreePage->physicalLocation) { UNPROTECT(firstFreePage->physicalLocation, 1); }
+        if (firstFreePage != pageAccessed) {
+            UNPROTECT(pageAccessed->physicalLocation, 1);
+            swapPages(pageAccessed, firstFreePage);
+            PROTECT(firstFreePage->physicalLocation, 1);
+        }
         pageAccessed->thread = currentTcb;
-        pageAccessed->pageNumber = 0;
-        struct threadMemoryMetadata * threadMeta = THRD_META_PTR(pageAccessed->physicalLocation);
-        threadMeta->partition = createPartition(threadMeta + 1, PAGE_SIZE - THRD_META_SIZE);
+        pageAccessed->pageNumber = pageNumber;
+        if (!pageNumber) {
+            struct threadMemoryMetadata * threadMeta = THRD_META_PTR(pageAccessed->physicalLocation);
+            threadMeta->partition = createPartition(threadMeta + 1, PAGE_SIZE - THRD_META_SIZE);
+        }
     }  
 }
 
