@@ -31,8 +31,8 @@
 #define LIB_MEM_PART (MEM_INFO->libraryMemory)
 #define PG_TBL (MEM_INFO->pageTable)
 #define NUM_MEM_PGS (MEM_INFO->numMemPages)
-#define NUM_SWAP_PGS (MEM_INFO->numPages - MEM_INFO->numMemPages)
-#define NUM_PGS (MEM_INFO->numPages)
+#define NUM_SWAP_PGS (MEM_INFO->numSwapPages)
+#define NUM_PGS (NUM_MEM_PGS + NUM_SWAP_PGS)
 #define MEM_PGS CHAR_PTR(PG_TBL + NUM_PGS)
 #define SWAP_FILE (MEM_INFO->swapfile)
 #define SHRD_MEM_PART (MEM_INFO->sharedMemory)
@@ -82,7 +82,7 @@ struct memoryMetadata {
     struct memoryPartition libraryMemory;
     struct pageTableRow * pageTable;
     size_t numMemPages;
-    size_t numPages;
+    size_t numSwapPages;
     int swapfile;
     struct memoryPartition sharedMemory;
 };
@@ -239,7 +239,7 @@ void swapPages(struct pageTableRow * row1, struct pageTableRow * row2) {
     }
 }
 
-void onAccess(int sig, siginfo_t * si, void * unused) {
+void onBadAccess(int sig, siginfo_t * si, void * unused) {
 
     unsigned long offset = UNSGND_LONG(si->si_addr) - UNSGND_LONG(MEM_PGS);
     unsigned long pageNumber = offset / PAGE_SIZE;
@@ -277,71 +277,76 @@ void onAccess(int sig, siginfo_t * si, void * unused) {
     }  
 }
 
-// Allocates size bytes in memory and returns a pointer to it
-void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
+void initializeMemory() {
 
     PAGE_SIZE = sysconf(_SC_PAGE_SIZE);
 
+    // Allocating space
+    memory = memalign(PAGE_SIZE, MEM_SIZE);
+    
+    // Calculating temporary numbers
+    size_t libPlusThreadsSpace = MEM_SIZE - MEM_META_SIZE - SHRD_MEM_SIZE;
+    size_t numDiv = LIBRARY_MEMORY_WEIGHT + THREADS_MEMORY_WEIGHT;
+    size_t divSize = libPlusThreadsSpace / numDiv;
+    size_t pageWithTableRowSize = PAGE_SIZE + PG_TBL_ROW_SIZE;
+    size_t threadsMemorySize = divSize * THREADS_MEMORY_WEIGHT;
+    size_t libraryMemorySize = libPlusThreadsSpace - threadsMemorySize;
+    size_t numSwapPages = SWAP_SIZE / PAGE_SIZE;
+    size_t memPgPlusMemTblSpace = threadsMemorySize - (numSwapPages * PG_TBL_ROW_SIZE);
+    size_t numMemPages = memPgPlusMemTblSpace / pageWithTableRowSize;
+    size_t numPages = numSwapPages + numMemPages;
+    size_t pageTableSize = numPages * PG_TBL_ROW_SIZE;
+    while ((MEM_META_SIZE + libraryMemorySize + pageTableSize) % PAGE_SIZE) {
+        libraryMemorySize--;
+        threadsMemorySize = libPlusThreadsSpace - libraryMemorySize;
+        memPgPlusMemTblSpace = threadsMemorySize - (numSwapPages * PG_TBL_ROW_SIZE);
+        numMemPages = memPgPlusMemTblSpace / pageWithTableRowSize;
+        numPages = numSwapPages + numMemPages;
+        pageTableSize = numPages * PG_TBL_ROW_SIZE;
+    }
+
+    // Setting memory's metadata
+    LIB_MEM_PART = createPartition(MEM_INFO + 1, libraryMemorySize);
+    SHRD_MEM_PART = createPartition(memory + MEM_META_SIZE + libPlusThreadsSpace, SHRD_MEM_SIZE);
+    SWAP_FILE = open("swapfile", O_CREAT|O_RDWR|O_TRUNC);
+    PG_TBL = PG_TBL_ROW_PTR(memory + MEM_META_SIZE + libraryMemorySize);
+    NUM_MEM_PGS = numMemPages;
+    NUM_SWAP_PGS = numSwapPages;
+
+    // Initializing page table
+    off_t i;
+    for (i = 0; i < numMemPages; i++) {
+        PG_TBL[i].thread = NULL;
+        PG_TBL[i].physicalLocation = MEM_PGS + (i * PAGE_SIZE);
+        PG_TBL[i].virtualLocation = -1;
+    }
+    off_t j;
+    for (j = 0; j < numSwapPages; j += PAGE_SIZE) {
+        PG_TBL[i].thread = NULL;
+        PG_TBL[i].physicalLocation = NULL;
+        PG_TBL[i].virtualLocation = j;
+        i++;
+    }
+
+    // Setting signal handler to be fired when pages
+    // are are accessed.
+    PROTECT(MEM_PGS, numMemPages);
+    struct sigaction sa;
+    sa.sa_flags = SA_SIGINFO;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_sigaction = onBadAccess;
+    if (sigaction(SIGSEGV, &sa, NULL) == -1) {
+        fprintf(stderr, "Fatal error setting up signal handler\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+// Allocates size bytes in memory and returns a pointer to it
+void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
+
     // If memory is null, initialize it
     if (!memory) {
-
-        struct sigaction sa;
-        sa.sa_flags = SA_SIGINFO;
-        sigemptyset(&sa.sa_mask);
-        sa.sa_sigaction = onAccess;
-
-        if (sigaction(SIGSEGV, &sa, NULL) == -1) {
-            fprintf(stderr, "Fatal error setting up signal handler\n");
-            exit(EXIT_FAILURE);
-        }
-
-        // Allocating space
-        memory = memalign(PAGE_SIZE, MEM_SIZE);
-        
-        // Calculating temporary numbers
-        size_t libPlusThreadsSpace = MEM_SIZE - MEM_META_SIZE - SHRD_MEM_SIZE;
-        size_t numDiv = LIBRARY_MEMORY_WEIGHT + THREADS_MEMORY_WEIGHT;
-        size_t divSize = libPlusThreadsSpace / numDiv;
-        size_t pageWithTableRowSize = PAGE_SIZE + PG_TBL_ROW_SIZE;
-        size_t threadsMemorySize = divSize * THREADS_MEMORY_WEIGHT;
-        size_t libraryMemorySize = libPlusThreadsSpace - threadsMemorySize;
-        size_t numSwapPages = SWAP_SIZE / PAGE_SIZE;
-        size_t memPgPlusMemTblSpace = threadsMemorySize - (numSwapPages * PG_TBL_ROW_SIZE);
-        size_t numMemPages = memPgPlusMemTblSpace / pageWithTableRowSize;
-        size_t numPages = numSwapPages + numMemPages;
-        size_t pageTableSize = numPages * PG_TBL_ROW_SIZE;
-        while ((MEM_META_SIZE + libraryMemorySize + pageTableSize) % PAGE_SIZE) {
-            libraryMemorySize--;
-            threadsMemorySize = libPlusThreadsSpace - libraryMemorySize;
-            memPgPlusMemTblSpace = threadsMemorySize - (numSwapPages * PG_TBL_ROW_SIZE);
-            numMemPages = memPgPlusMemTblSpace / pageWithTableRowSize;
-            numPages = numSwapPages + numMemPages;
-            pageTableSize = numPages * PG_TBL_ROW_SIZE;
-        }
-
-        // Setting memory's metadata
-        LIB_MEM_PART = createPartition(MEM_INFO + 1, libraryMemorySize);
-        SHRD_MEM_PART = createPartition(memory + MEM_META_SIZE + libPlusThreadsSpace, SHRD_MEM_SIZE);
-        SWAP_FILE = open("swapfile", O_CREAT|O_RDWR|O_TRUNC);
-        PG_TBL = PG_TBL_ROW_PTR(memory + MEM_META_SIZE + libraryMemorySize);
-        NUM_MEM_PGS = numMemPages;
-        NUM_PGS = numPages;
-
-        // Initializing page table
-        off_t i;
-        for (i = 0; i < numMemPages; i++) {
-            PG_TBL[i].thread = NULL;
-            PG_TBL[i].physicalLocation = MEM_PGS + (i * PAGE_SIZE);
-            PG_TBL[i].virtualLocation = -1;
-        }
-        off_t j;
-        for (j = 0; j < numSwapPages; j += PAGE_SIZE) {
-            PG_TBL[i].thread = NULL;
-            PG_TBL[i].physicalLocation = NULL;
-            PG_TBL[i].virtualLocation = j;
-            i++;
-        }
-        PROTECT(MEM_PGS, numMemPages);
+        initializeMemory();
     }
 
     if (request == LIBRARYREQ) {
