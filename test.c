@@ -1,7 +1,7 @@
 #include "my_pthread_t.h"
 
 void * test(void * nun) {
-    char * some = malloc(8000);
+    char * some = malloc(16000);
     sprintf(some, "in test");
     // char * some = "in some";
     printf("%s\n", some);
@@ -9,7 +9,7 @@ void * test(void * nun) {
 }
 
 void * test2(void * nun) {
-    char * some = malloc(100);
+    char * some = malloc(8000);
     sprintf(some, "in test2");
     // char * some = "in some";
     printf("%s\n", some);
