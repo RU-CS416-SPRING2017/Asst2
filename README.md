@@ -1,12 +1,32 @@
 # Asst2: Segmented Paging
 
-## Phase A: Direct-Mapped Memory
+## Usage
 
-The "main memory", "RAM", or "pysical memory" is a `char` array referenced by `memory` of size `MEM_SIZE` where all bytes are initialized to `0`. The first `sizeof(struct memoryMetadata)` bytes is metadata. The first `sizeof(int)` bytes tell if the memory has been initialized. The rest of the metadata gives information on the "partitions" used by the thread library and threads.
+Files needed to use this library:
+
+* `my_pthread_t.h`
+* `mylib.h`
+* `my_pthread.c`
+* `mylib.c`
+
+Use `gcc` to compile the following source files:
+
+* `my_pthread.c`
+* `mylib.c`
+
+C programs that requires my thread library and memory manager need to include the folowing line:
+
+```c
+#include "my_pthread_t.h"
+```
+
+## Prelude
+
+The "main memory", "RAM", or "pysical memory" is a contiguous allocation of `MEM_SIZE` bytes referenced  by `memory`. The first `sizeof(struct memoryMetadata)` bytes is metadata. The metadata gives information on where the thread library "partition", page table, and shared memory "partition" is located. It tells the how many memory pages and swap file pages threre are. The metadata also stores the file descriptor for the swap file.
 
 A "partition" is a chunk of memory that consists of atleast one "block" of memory. If there is more than one "block" in a partition, the "blocks" must be contiguous.
 
-A "block" is a chunk of memory that consists of "head" metadata, a "payload", and "tail" metadata. "Head" and "tail" metadata are the same except "head" metadata resides in the first `sizeof(sturct blockMetadata)` bytes of the "block" and "tail" metadata resides in the last `sizeof(sturct blockMetadata)` bytes. The "payload" resides inbetween the "head" and "tail" metadata. The first `sizeof(int)` bytes of the "head" and "tail" metadata tell if the "block" is used, and the rest of the meatadata tells the size of the payload.
+A "block" is a chunk of memory that consists of a "head", a "payload", and a "tail". the "Head" and "tail" are both identical metadata where the first `sizeof(int)` bytes tell if the "block" is used, and the rest of the meatadata tells the size of the payload. As the name implies, the "head" resides in the first `sizeof(sturct blockMetadata)` bytes of the "block" and "tail" resides in the last `sizeof(sturct blockMetadata)` bytes. The "payload" is placed inbetween the "head" and "tail" metadata.
 
 ### `myallocate`
 
