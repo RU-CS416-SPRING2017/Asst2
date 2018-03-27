@@ -337,7 +337,7 @@ void initializeMemory() {
         exit(EXIT_FAILURE);
     }
     
-    // Calculating numbers for properly alligned boundrys in memory
+    // Calculating numbers for properly alligned boundries in memory
     size_t libPlusThreadsSpace = MEM_SIZE - MEM_META_SIZE - SHRD_MEM_SIZE;
     size_t numDiv = LIBRARY_MEMORY_WEIGHT + THREADS_MEMORY_WEIGHT;
     size_t divSize = libPlusThreadsSpace / numDiv;
