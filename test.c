@@ -8,7 +8,7 @@ void * test(void * nun) {
     malloc(40);
     sprintf(some, "in test1");
     printf("%s\n", some);
-    return some;
+    return NULL;
 }
 
 void * test2(void * nun) {
@@ -27,10 +27,6 @@ int main() {
     printf("in main\n");
     void * ret;
     pthread_join(t, &ret);
-    char * some = &ret;
-    printf("out %s\n", some);
     pthread_join(t2, &ret);
-    some = &ret;
-    printf("out %s\n", some);
     return 0;
 }
