@@ -453,7 +453,9 @@ void * allocateFrom(size_t size, struct memoryPartition * partition) {
 }
 
 // Allocates size bytes from the approprite partition and returns a pointer
-// to the allocation. Returns NULL if no space or on bad request.
+// to the allocation. Returns NULL if no space or on bad request. Undefined
+// behavior occurs if this function is called as a thread before creating a
+// thread from the thread library.
 void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
 
     // Initialize the memory manager if not already
@@ -487,7 +489,9 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
 }
 
 // Allocates size bytes from memory as a thread.
-// Returns NULL if no space of size is 0.
+// Returns NULL if no space of size is 0. Undefined
+// behavior occurs if this function is called before
+// creating a thread from the thread library.
 void * threadAllocate(size_t size) {
     if (!size) { return NULL; }
     return myallocate(size, __FILE__, __LINE__, THREADREQ);
