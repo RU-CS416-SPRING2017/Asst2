@@ -293,11 +293,15 @@ void onBadAccess(int sig, siginfo_t * si, void * unused) {
 
     // Give the thread an unused page if it doesn't have one and then swap
     } else if (firstFreePage) {
-        if (firstFreePage->physicalLocation) { unprotectPages(firstFreePage->physicalLocation, 1); }
+        if (firstFreePage->physicalLocation) {
+            unprotectPages(firstFreePage->physicalLocation, 1);
+        }
         if (firstFreePage != pageAccessed) {
             unprotectPages(pageAccessed->physicalLocation, 1);
             swapPages(pageAccessed, firstFreePage);
-            protectPages(firstFreePage->physicalLocation, 1);
+            if (firstFreePage->physicalLocation) {
+                protectPages(firstFreePage->physicalLocation, 1);
+            }
         }
         pageAccessed->thread = currentTcb;
         pageAccessed->pageNumber = pageNumber;
