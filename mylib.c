@@ -493,7 +493,7 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
 // behavior occurs if this function is called before
 // creating a thread from the thread library.
 void * threadAllocate(size_t size) {
-    if (!size) { return NULL; }
+    if (!size || !currentTcb) { return NULL; }
     return myallocate(size, __FILE__, __LINE__, THREADREQ);
 }
 
