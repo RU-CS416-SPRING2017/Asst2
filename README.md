@@ -49,7 +49,7 @@ The `threadDeallocate()` function returns no value.
 
 ### How Main Memory is Divided
 
-The "main memory", "RAM", or "pysical memory" is a contiguous allocation of `MEM_SIZE` bytes referenced  by `memory`. The first `sizeof(struct memoryMetadata)` bytes is metadata. The metadata gives information on where the thread library "partition", page table, and shared memory "partition" is located. It tells the how many memory pages and swap file pages threre are. The metadata also stores the file descriptor for the swap file.
+The "main memory", "RAM", or "pysical memory" is a contiguous allocation of `MEM_SIZE` bytes referenced  by `memory`. The first `sizeof(struct memoryMetadata)` bytes is metadata. The metadata gives information on where the thread library "partition", page table, memory pages, and shared memory "partition" is located. It tells the how many memory pages and swap file pages threre are. The metadata also stores the file descriptor for the swap file.
 
 ### Definitions
 
@@ -67,12 +67,6 @@ The thread library "partition" starts right after `memory`'s metadata, pricicely
 
 ## Implementation
 
+### Initialization
 
-
-### `myallocate`
-
-When called, `myallocate` first checks if `memory` is initialized. If not, `memory` is initialized by setting the metadata and "partitions" for the thread library and threads according to `LIBRARY_MEMORY_WEIGHT` and `THREADS_MEMORY_WEIGHT`. `myallocate` allocates the requested size of memory in the requested "partition" using a first-fit algorithm.
-
-### `mydeallocate`
-
-When called, `mydeallocate` first checks if `ptr` is in the requested "parition". If it is, `mydeallocate` sets the corresponding "block" to free and coalesces with imediate neighboring "blocks" if they are free.
+The memory manager is initialized on the first call to either `myallocate()` or `shalloc()`. Initialization starts off storing the system page size and allocating `MEM_SIZE` page-alligned bytes to `memory`. After that, different numbers are calculated for later use when assigning sizes to the thread library "partition" and threads' memory aswell as finding the number of pages in memory and swap file. The calculations devide memory for library and threads based on `LIBRARY_MEMORY_WEIGHT` and `THREADS_MEMORY_WEIGHT` ensuring the memory pages for the threads are aligned with the system pages. Now `memory`'s metadata is initialized using the calculations to create "partitions" for the library and shared memory, storing the address to threads' memory and the number of pages, plus creating the swap file. A signal handler is initiated to close the swap file on exit and then the swap file is set to 16 megabytes. Finally, the page table is initialized, the memory pages are mprtected, and a signal handler is instantiated to handle bad access to protected memory pages.
