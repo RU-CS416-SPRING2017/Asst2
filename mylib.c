@@ -572,7 +572,7 @@ void mydeallocate(void * ptr, char * fileName, int lineNumber, int request) {
 // Frees ptr's block if ptr is in the shared partition
 // or the thread's partition. Undifined behavior occurs
 // if ptr was already freed or if ptr wasn't retrned by
-// an allocating fucntion.
+// an allocating fucntion. Does nothing is ptr is NULL.
 void threadDeallocate(void * ptr) {
-    mydeallocate(ptr, __FILE__, __LINE__, THREADREQ);
+    if (ptr) { mydeallocate(ptr, __FILE__, __LINE__, THREADREQ); }
 }
