@@ -22,11 +22,23 @@ C programs that requires my thread library and memory manager need to include th
 
 ## Prelude
 
+### How Main Memory is Divided
+
 The "main memory", "RAM", or "pysical memory" is a contiguous allocation of `MEM_SIZE` bytes referenced  by `memory`. The first `sizeof(struct memoryMetadata)` bytes is metadata. The metadata gives information on where the thread library "partition", page table, and shared memory "partition" is located. It tells the how many memory pages and swap file pages threre are. The metadata also stores the file descriptor for the swap file.
+
+### Definitions
 
 A "partition" is a chunk of memory that consists of atleast one "block" of memory. If there is more than one "block" in a partition, the "blocks" must be contiguous.
 
 A "block" is a chunk of memory that consists of a "head", a "payload", and a "tail". the "Head" and "tail" are both identical metadata where the first `sizeof(int)` bytes tell if the "block" is used, and the rest of the meatadata tells the size of the payload. As the name implies, the "head" resides in the first `sizeof(sturct blockMetadata)` bytes of the "block" and "tail" resides in the last `sizeof(sturct blockMetadata)` bytes. The "payload" is placed inbetween the "head" and "tail" metadata.
+
+### Main Memory Divisions
+
+#### Thread Library "Partition"
+
+This "partition" used for to allocate memory on library calls to `myallocate`.
+
+The thread library "partition" starts right after `memory`'s metadata, pricicely at the address `memory + sizeof(struct memoryMetadata)`. It's size is calculated on initialization by first finding the space left in `memory` after reserving space for the metadata and shared memory "partition". The leftover space is then devided based on `
 
 ### `myallocate`
 
