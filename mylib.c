@@ -2,10 +2,7 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <string.h>
-<<<<<<< HEAD
-=======
 #include <errno.h>
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
 #include "my_pthread_t.h"
 
 // Size macros
@@ -15,17 +12,8 @@
 #define MEM_META_SIZE sizeof(struct memoryMetadata)
 #define BLK_META_SIZE sizeof(struct blockMetadata)
 #define DBL_BLK_META_SIZE (BLK_META_SIZE * 2)
-<<<<<<< HEAD
-#define MEM_META_SIZE sizeof(struct memoryMetadata)
-#define BLK_SIZE(payloadSize) (payloadSize + DBL_BLK_META_SIZE)
-// #define PAGE_SIZE sysconf(_SC_PAGE_SIZE)
-#define PG_TBL_ROW_SIZE sizeof(struct pageTableRow)
-#define SWAP_SIZE (MEM_SIZE * 2)
-#define SHRD_MEM_SIZE (PAGE_SIZE * 4)
-=======
 #define BLK_SIZE(payloadSize) (payloadSize + DBL_BLK_META_SIZE)
 #define PG_TBL_ROW_SIZE sizeof(struct pageTableRow)
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
 #define THRD_META_SIZE sizeof(struct threadMemoryMetadata)
 
 // Casting macros
@@ -53,14 +41,6 @@
 
 // Shorthand macros
 #define COPY_PAGE(dest, page) memcpy(dest, page, pageSize)
-
-// Shorthand macros
-#define SEEK_SWAP_FILE(offset) lseek(SWAP_FILE, offset, SEEK_SET)
-#define READ_SWAP_PAGE(dest) read(SWAP_FILE, dest, PAGE_SIZE)
-#define WRITE_SWAP_PAGE(src) write(SWAP_FILE, src, PAGE_SIZE)
-#define COPY_PAGE(dest, page) memcpy(dest, page, PAGE_SIZE)
-#define PROTECT(startPage, numPages) mprotect(startPage, numPages * PAGE_SIZE, PROT_NONE)
-#define UNPROTECT(startPage, numPages) mprotect(startPage, numPages * PAGE_SIZE, PROT_READ|PROT_WRITE|PROT_EXEC)
 
 // These macros determine how much of memory should
 // be partitioned for the thread library vs threads
@@ -105,9 +85,6 @@ struct memoryMetadata {
 
 // "Main memory"
 char * memory = NULL;
-long PAGE_SIZE;
-extern char block;
-extern tcb * currentTcb;
 
 // Stores page size on memory initialization
 long pageSize;
@@ -216,50 +193,26 @@ void extendPartition(struct memoryPartition * partition, size_t size) {
     }
 }
 
-<<<<<<< HEAD
-// Protects all (mem) pages of the given thread
-=======
 // Protects all memory pages of the given thread
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
 void protectAllPages(tcb * thread) {
     off_t i;
     for (i = 0; i < NUM_MEM_PGS; i++) {
         if (PG_TBL[i].thread == thread) {
-<<<<<<< HEAD
-            PROTECT(PG_TBL[i].physicalLocation, 1);
-=======
             protectPages(PG_TBL[i].physicalLocation, 1);
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
         }
     }
 }
 
-<<<<<<< HEAD
-// Unprotects all (mem) pages of the given thread
-=======
 // Unprotects all memory pages of the given thread
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
 void unprotectAllPages(tcb * thread) {
     off_t i;
     for (i = 0; i < NUM_MEM_PGS; i++) {
         if (PG_TBL[i].thread == thread) {
-<<<<<<< HEAD
-            UNPROTECT(PG_TBL[i].physicalLocation, 1);
-=======
             unprotectPages(PG_TBL[i].physicalLocation, 1);
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
         }
     }
 }
 
-<<<<<<< HEAD
-// Swaps the 2 pages
-void swapPages(struct pageTableRow * row1, struct pageTableRow * row2) {
-
-    if (row1 != row2) {
-
-        char temp[PAGE_SIZE];
-=======
 // Swaps the 2 pages. Ends up with row1 refrencing the same
 // memory but now with the page that was originally in row2's
 // memory. Threads and page numbers are also swapped.
@@ -269,19 +222,13 @@ void swapPages(struct pageTableRow * row1, struct pageTableRow * row2) {
     if (row1 != row2) {
 
         char temp[pageSize];
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
 
         // Copy row1 into temp
         if (row1->physicalLocation) {
             COPY_PAGE(temp, row1->physicalLocation);
         } else {
-<<<<<<< HEAD
-            SEEK_SWAP_FILE(row1->virtualLocation);
-            READ_SWAP_PAGE(temp);
-=======
             seekSwapFile(row1->virtualLocation);
             readSwapFilePage(temp);
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
         }
 
         // Copy row2 into row1 and temp into row2
@@ -289,33 +236,12 @@ void swapPages(struct pageTableRow * row1, struct pageTableRow * row2) {
             if (row1->physicalLocation) {
                 COPY_PAGE(row1->physicalLocation, row2->physicalLocation);
             } else {
-<<<<<<< HEAD
-                SEEK_SWAP_FILE(row1->virtualLocation);
-                WRITE_SWAP_PAGE(row2->physicalLocation);
-=======
                 seekSwapFile(row1->virtualLocation);
                 writeSwapFilePage(row2->physicalLocation);
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
             }
             COPY_PAGE(row2->physicalLocation, temp);
         } else {
             if (row1->physicalLocation) {
-<<<<<<< HEAD
-                SEEK_SWAP_FILE(row2->virtualLocation);
-                READ_SWAP_PAGE(row1->physicalLocation);
-            } else {
-                char temp2[PAGE_SIZE];
-                SEEK_SWAP_FILE(row2->virtualLocation);
-                READ_SWAP_PAGE(temp2);
-                SEEK_SWAP_FILE(row1->virtualLocation);
-                WRITE_SWAP_PAGE(temp2);
-            }
-            SEEK_SWAP_FILE(row2->virtualLocation);
-            WRITE_SWAP_PAGE(temp);
-        }
-
-        // Swap the tcbs of both threads
-=======
                 seekSwapFile(row2->virtualLocation);
                 readSwapFilePage(row1->physicalLocation);
             } else {
@@ -330,7 +256,6 @@ void swapPages(struct pageTableRow * row1, struct pageTableRow * row2) {
         }
 
         // Swap the tcbs and pageNumbers of both threads
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
         tcb * tempTcb = row1->thread;
         row1->thread = row2->thread;
         row2->thread = tempTcb;
@@ -340,12 +265,6 @@ void swapPages(struct pageTableRow * row1, struct pageTableRow * row2) {
     }
 }
 
-<<<<<<< HEAD
-void onBadAccess(int sig, siginfo_t * si, void * unused) {
-
-    unsigned long offset = UNSGND_LONG(si->si_addr) - UNSGND_LONG(MEM_PGS);
-    unsigned long pageNumber = offset / PAGE_SIZE;
-=======
 // This function is fired when a thread is trying
 // to access it's page but it's not there.
 void onBadAccess(int sig, siginfo_t * si, void * unused) {
@@ -354,15 +273,11 @@ void onBadAccess(int sig, siginfo_t * si, void * unused) {
     unsigned long offset = UNSGND_LONG(si->si_addr) - UNSGND_LONG(MEM_PGS);
     unsigned long pageNumber = offset / pageSize;
 
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
     struct pageTableRow * pageAccessed = PG_TBL + pageNumber;
     struct pageTableRow * pageWanted = NULL;
     struct pageTableRow * firstFreePage = NULL;
 
-<<<<<<< HEAD
-=======
     // Search page table for appropriate page
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
     unsigned long i;
     for (i = 0; i < NUM_PGS; i++) {
         if (PG_TBL[i].thread == currentTcb && PG_TBL[i].pageNumber == pageNumber) {
@@ -373,24 +288,6 @@ void onBadAccess(int sig, siginfo_t * si, void * unused) {
         }
     }
 
-<<<<<<< HEAD
-    if (pageWanted) {
-        UNPROTECT(pageAccessed->physicalLocation, 1);
-        swapPages(pageAccessed, pageWanted);
-        PROTECT(pageWanted->physicalLocation, 1);
-    } else if (firstFreePage) {
-        if (firstFreePage->physicalLocation) { UNPROTECT(firstFreePage->physicalLocation, 1); }
-        if (firstFreePage != pageAccessed) {
-            UNPROTECT(pageAccessed->physicalLocation, 1);
-            swapPages(pageAccessed, firstFreePage);
-            PROTECT(firstFreePage->physicalLocation, 1);
-        }
-        pageAccessed->thread = currentTcb;
-        pageAccessed->pageNumber = pageNumber;
-        if (!pageNumber) {
-            struct threadMemoryMetadata * threadMeta = THRD_META_PTR(pageAccessed->physicalLocation);
-            threadMeta->partition = createPartition(threadMeta + 1, PAGE_SIZE - THRD_META_SIZE);
-=======
     // Swap pages if thread owns the the page it was trying to access
     if (pageWanted) {
         unprotectPages(pageAccessed->physicalLocation, 1);
@@ -416,114 +313,22 @@ void onBadAccess(int sig, siginfo_t * si, void * unused) {
         if (!pageNumber) {
             struct threadMemoryMetadata * threadMeta = THRD_META_PTR(pageAccessed->physicalLocation);
             threadMeta->partition = createPartition(threadMeta + 1, pageSize - THRD_META_SIZE);
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
         }
     }  
 }
 
-<<<<<<< HEAD
-=======
 // Last function called before
 // program exits. Closes swapFile.
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
 void cleanup() {
     close(SWAP_FILE);
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-void initializeMemory() {
-
-    PAGE_SIZE = sysconf(_SC_PAGE_SIZE);
-
-    // Allocating space
-    memory = memalign(PAGE_SIZE, MEM_SIZE);
-    
-    // Calculating temporary numbers
-    size_t libPlusThreadsSpace = MEM_SIZE - MEM_META_SIZE - SHRD_MEM_SIZE;
-    size_t numDiv = LIBRARY_MEMORY_WEIGHT + THREADS_MEMORY_WEIGHT;
-    size_t divSize = libPlusThreadsSpace / numDiv;
-    size_t pageWithTableRowSize = PAGE_SIZE + PG_TBL_ROW_SIZE;
-    size_t threadsMemorySize = divSize * THREADS_MEMORY_WEIGHT;
-    size_t libraryMemorySize = libPlusThreadsSpace - threadsMemorySize;
-    size_t numSwapPages = SWAP_SIZE / PAGE_SIZE;
-=======
-// Initializes the memory manager. Exits on error.
-=======
 // Initializes the memory manager only if
 // memory is not initialized. Exits on error.
->>>>>>> 6f8ed841cebf1965ef571fb237f71483a121b19f
 void initializeMemory() {
 
     // Only run if memory is not initialized
     if (!memory) {
-<<<<<<< HEAD
-        fprintf(stderr, "Error allocating alligned memory\n");
-        exit(EXIT_FAILURE);
-    }
-    
-    // Calculating numbers for properly alligned boundries in memory
-    size_t libPlusThreadsSpace = MEM_SIZE - MEM_META_SIZE - SHRD_MEM_SIZE;
-    size_t numDiv = LIBRARY_MEMORY_WEIGHT + THREADS_MEMORY_WEIGHT;
-    size_t divSize = libPlusThreadsSpace / numDiv;
-    size_t pageWithTableRowSize = pageSize + PG_TBL_ROW_SIZE;
-    size_t threadsMemorySize = divSize * THREADS_MEMORY_WEIGHT;
-    size_t libraryMemorySize = libPlusThreadsSpace - threadsMemorySize;
-    size_t numSwapPages = SWAP_SIZE / pageSize;
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
-    size_t memPgPlusMemTblSpace = threadsMemorySize - (numSwapPages * PG_TBL_ROW_SIZE);
-    size_t numMemPages = memPgPlusMemTblSpace / pageWithTableRowSize;
-    size_t numPages = numSwapPages + numMemPages;
-    size_t pageTableSize = numPages * PG_TBL_ROW_SIZE;
-<<<<<<< HEAD
-    while ((MEM_META_SIZE + libraryMemorySize + pageTableSize) % PAGE_SIZE) {
-=======
-    while ((MEM_META_SIZE + libraryMemorySize + pageTableSize) % pageSize) {
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
-        libraryMemorySize--;
-        threadsMemorySize = libPlusThreadsSpace - libraryMemorySize;
-        memPgPlusMemTblSpace = threadsMemorySize - (numSwapPages * PG_TBL_ROW_SIZE);
-        numMemPages = memPgPlusMemTblSpace / pageWithTableRowSize;
-        numPages = numSwapPages + numMemPages;
-        pageTableSize = numPages * PG_TBL_ROW_SIZE;
-    }
-
-<<<<<<< HEAD
-    // Setting memory's metadata
-=======
-    // Setting memory's metadata based on calculated numbers
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
-    LIB_MEM_PART = createPartition(MEM_INFO + 1, libraryMemorySize);
-    SHRD_MEM_PART = createPartition(memory + MEM_SIZE - SHRD_MEM_SIZE, SHRD_MEM_SIZE);
-    PG_TBL = PG_TBL_ROW_PTR(memory + MEM_META_SIZE + libraryMemorySize);
-    NUM_MEM_PGS = numMemPages;
-    NUM_SWAP_PGS = numSwapPages;
-<<<<<<< HEAD
-    SWAP_FILE = open("swapfile", O_CREAT|O_RDWR|O_TRUNC, S_IRUSR|S_IWUSR);
-
-    // Fire cleanup when program exits
-    atexit(cleanup);
-
-    // Create 16MB swapfile
-    SEEK_SWAP_FILE(SWAP_SIZE - 1);
-    write(SWAP_FILE, "\0", 1);
-
-    // Initializing page table
-    off_t i;
-    for (i = 0; i < numMemPages; i++) {
-        PG_TBL[i].thread = NULL;
-        PG_TBL[i].physicalLocation = MEM_PGS + (i * PAGE_SIZE);
-        PG_TBL[i].virtualLocation = -1;
-    }
-    off_t j;
-    for (j = 0; j < numSwapPages; j += PAGE_SIZE) {
-=======
-    SWAP_FILE = open("swapFile", O_CREAT|O_RDWR|O_TRUNC, S_IRUSR|S_IWUSR);
-    if (SWAP_FILE == -1) {
-        fprintf(stderr, "Error opening swapFile: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-=======
 
         // Storing system page size
         pageSize = sysconf(_SC_PAGE_SIZE);
@@ -531,7 +336,6 @@ void initializeMemory() {
             fprintf(stderr, "Error storing system page size: %s\n", strerror(errno));
             exit(EXIT_FAILURE);
         }
->>>>>>> 6f8ed841cebf1965ef571fb237f71483a121b19f
 
         // Allocating page alligned memory space
         memory = memalign(pageSize, MEM_SIZE);
@@ -573,43 +377,6 @@ void initializeMemory() {
             exit(EXIT_FAILURE);
         }
 
-<<<<<<< HEAD
-    // Initializing the page table
-    off_t i;
-    for (i = 0; i < numMemPages; i++) {
-        PG_TBL[i].thread = NULL;
-        PG_TBL[i].physicalLocation = MEM_PGS + (i * pageSize);
-        PG_TBL[i].virtualLocation = -1;
-    }
-    off_t j;
-    for (j = 0; j < numSwapPages; j += pageSize) {
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
-        PG_TBL[i].thread = NULL;
-        PG_TBL[i].physicalLocation = NULL;
-        PG_TBL[i].virtualLocation = j;
-        i++;
-    }
-
-<<<<<<< HEAD
-    // Setting signal handler to be fired when pages
-    // are are accessed.
-    PROTECT(MEM_PGS, numMemPages);
-=======
-    // Setting signal handler to be fired on bad page access
-    protectPages(MEM_PGS, numMemPages);
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
-    struct sigaction sa;
-    sa.sa_flags = SA_SIGINFO;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_sigaction = onBadAccess;
-    if (sigaction(SIGSEGV, &sa, NULL) == -1) {
-<<<<<<< HEAD
-        fprintf(stderr, "Fatal error setting up signal handler\n");
-=======
-        fprintf(stderr, "Error setting up signal handler for bad page access: %s\n", strerror(errno));
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
-        exit(EXIT_FAILURE);
-=======
         // Setting signal handler to be fired as the
         // last function before the program exits
         atexit(cleanup);
@@ -646,16 +413,10 @@ void initializeMemory() {
             fprintf(stderr, "Error setting up signal handler for bad page access: %s\n", strerror(errno));
             exit(EXIT_FAILURE);
         }
->>>>>>> 6f8ed841cebf1965ef571fb237f71483a121b19f
     }
 }
 
-<<<<<<< HEAD
-// Returns 1 if thread can extend its pages
-// else returns 0
-=======
 // Returns 1 if thread can extend its pages else returns 0
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
 int canExtend(tcb * thread) {
     unsigned int numThreadPages;
     unsigned int totalUsedPages;
@@ -673,14 +434,8 @@ int canExtend(tcb * thread) {
     return 1;
 }
 
-<<<<<<< HEAD
-// Allocates memory of size between firstHead and lastTail.
-// Returns 0 if no space available, else returns pointer
-// to allocated memory.
-=======
 // Allocates size bytes from partition. Returns a pointer
 // to the allocated memory or NULL if there is no space.
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
 void * allocateFrom(size_t size, struct memoryPartition * partition) {
 
     struct blockMetadata * head = partition->firstHead;
@@ -705,18 +460,8 @@ void * allocateFrom(size_t size, struct memoryPartition * partition) {
     return head + 1;
 }
 
-<<<<<<< HEAD
-// Allocates size bytes in memory and returns a pointer to it
-=======
 // Allocates size bytes from the approprite partition and returns a pointer
-<<<<<<< HEAD
-// to the allocation. Returns NULL if no space or on bad request. Undefined
-// behavior occurs if this function is called as a thread before creating a
-// thread from the thread library.
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
-=======
 // to the allocation. Returns NULL if no space or on bad request.
->>>>>>> 6f8ed841cebf1965ef571fb237f71483a121b19f
 void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
 
     // Initialize the memory manager
@@ -729,18 +474,6 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
     // Allocate from thread address space
     } else if (request == THREADREQ) {
 
-<<<<<<< HEAD
-        block = 1;
-
-        void * ret = allocateFrom(size, &(THRD_MEM->partition));
-        if (canExtend(currentTcb)) {
-            while (!ret) {
-                extendPartition(&(THRD_MEM->partition), PAGE_SIZE);
-                ret = allocateFrom(size, &(THRD_MEM->partition));
-            }
-        }
-
-=======
         // Block scheduler for thread safety
         block = 1;
 
@@ -753,23 +486,12 @@ void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
         }
 
         // Unblock the scheduler and return
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
         block = 0;
         return ret;        
 
     } else { return NULL; }
 }
 
-<<<<<<< HEAD
-void * threadAllocate(size_t size) {
-    return myallocate(size, __FILE__, __LINE__, THREADREQ);
-}
-
-// Returns a shared regiion of memory
-void * shalloc(size_t size) {
-
-    // If memory is null, initialize it
-=======
 // Allocates size bytes from memory as a thread.
 // Returns NULL if no space of size is 0.
 void * threadAllocate(size_t size) {
@@ -781,37 +503,17 @@ void * threadAllocate(size_t size) {
 // Returns a pointer of size bytes from shared
 // memory. Returns NULL if no space or size is 0.
 void * shalloc(size_t size) {
-<<<<<<< HEAD
-
-    // Initialize the memory manager if not already
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
-    if (!memory) {
-        initializeMemory();
-    }
-
-<<<<<<< HEAD
-=======
-    if (!size) { return NULL; }
-
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
-=======
     initializeMemory();
     if (!size) { return NULL; }
->>>>>>> 6f8ed841cebf1965ef571fb237f71483a121b19f
     block = 1;
     void * ret = allocateFrom(size, &SHRD_MEM_PART);
     block = 0;
     return ret;
 }
 
-<<<<<<< HEAD
-// Deallocates a block between firstHead and lastTail where the payload is refrenced by ptr
-// returns 1 if succesfull and 0 otherwise
-=======
 // Deallocates ptr's block from partition. If ptr is not
 // in partition return 0, else return 1. Undefined behavior
 // if ptr isn't a pointer previously returned.
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
 int deallocateFrom(void * ptr, struct memoryPartition * partition) {
 
     // Check if ptr is in partition
@@ -850,15 +552,11 @@ int deallocateFrom(void * ptr, struct memoryPartition * partition) {
 // myallocate. Undifined behavior occurs if ptr was already freed or
 // if ptr wasn't retrned by an allocating fucntion.
 void mydeallocate(void * ptr, char * fileName, int lineNumber, int request) {
-<<<<<<< HEAD
-    if (request == LIBRARYREQ) { deallocateFrom(ptr, &LIB_MEM_PART); }
-=======
 
     // Deallocate from library partition
     if (request == LIBRARYREQ) { deallocateFrom(ptr, &LIB_MEM_PART); }
 
     // Deallocate from thread partition or shared partition in a thread-safe manor
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
     else if (request == THREADREQ) {
         block = 1;
         if (!deallocateFrom(ptr, &(THRD_MEM->partition))) {
@@ -868,17 +566,10 @@ void mydeallocate(void * ptr, char * fileName, int lineNumber, int request) {
     }
 }
 
-<<<<<<< HEAD
-=======
 // Frees ptr's block if ptr is in the shared partition
 // or the thread's partition. Undifined behavior occurs
 // if ptr was already freed or if ptr wasn't retrned by
-<<<<<<< HEAD
-// an allocating fucntion.
->>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
-=======
 // an allocating fucntion. Does nothing is ptr is NULL.
->>>>>>> 6f8ed841cebf1965ef571fb237f71483a121b19f
 void threadDeallocate(void * ptr) {
     if (ptr) { mydeallocate(ptr, __FILE__, __LINE__, THREADREQ); }
 }
