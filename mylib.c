@@ -116,6 +116,9 @@ long pageSize;
 extern char block;
 extern tcb * currentTcb;
 
+// Used to initialize the thread library
+void initializeThreads(void);
+
 // Seeks swapFile and exits on error
 void seekSwapFile(off_t offset) {
     if (lseek(SWAP_FILE, offset, SEEK_SET) == ((off_t) -1)) {
@@ -428,6 +431,7 @@ void cleanup() {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 void initializeMemory() {
 
     PAGE_SIZE = sysconf(_SC_PAGE_SIZE);
@@ -445,18 +449,15 @@ void initializeMemory() {
     size_t numSwapPages = SWAP_SIZE / PAGE_SIZE;
 =======
 // Initializes the memory manager. Exits on error.
+=======
+// Initializes the memory manager only if
+// memory is not initialized. Exits on error.
+>>>>>>> 6f8ed841cebf1965ef571fb237f71483a121b19f
 void initializeMemory() {
 
-    // Storing system page size
-    pageSize = sysconf(_SC_PAGE_SIZE);
-    if (pageSize == -1) {
-        fprintf(stderr, "Error storing system page size: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-
-    // Allocating page alligned memory space
-    memory = memalign(pageSize, MEM_SIZE);
+    // Only run if memory is not initialized
     if (!memory) {
+<<<<<<< HEAD
         fprintf(stderr, "Error allocating alligned memory\n");
         exit(EXIT_FAILURE);
     }
@@ -522,18 +523,57 @@ void initializeMemory() {
         fprintf(stderr, "Error opening swapFile: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
+=======
 
-    // Setting signal handler to be fired as the
-    // last function before the program exits
-    atexit(cleanup);
+        // Storing system page size
+        pageSize = sysconf(_SC_PAGE_SIZE);
+        if (pageSize == -1) {
+            fprintf(stderr, "Error storing system page size: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+>>>>>>> 6f8ed841cebf1965ef571fb237f71483a121b19f
 
-    // Create 16MB swap file
-    seekSwapFile(SWAP_SIZE - 1);
-    if (write(SWAP_FILE, "\0", 1) == -1) {
-        fprintf(stderr, "Error initializing swapFile to 16MB: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
+        // Allocating page alligned memory space
+        memory = memalign(pageSize, MEM_SIZE);
+        if (!memory) {
+            fprintf(stderr, "Error allocating alligned memory\n");
+            exit(EXIT_FAILURE);
+        }
+        
+        // Calculating numbers for properly alligned boundries in memory
+        size_t libPlusThreadsSpace = MEM_SIZE - MEM_META_SIZE - SHRD_MEM_SIZE;
+        size_t numDiv = LIBRARY_MEMORY_WEIGHT + THREADS_MEMORY_WEIGHT;
+        size_t divSize = libPlusThreadsSpace / numDiv;
+        size_t pageWithTableRowSize = pageSize + PG_TBL_ROW_SIZE;
+        size_t threadsMemorySize = divSize * THREADS_MEMORY_WEIGHT;
+        size_t libraryMemorySize = libPlusThreadsSpace - threadsMemorySize;
+        size_t numSwapPages = SWAP_SIZE / pageSize;
+        size_t memPgPlusMemTblSpace = threadsMemorySize - (numSwapPages * PG_TBL_ROW_SIZE);
+        size_t numMemPages = memPgPlusMemTblSpace / pageWithTableRowSize;
+        size_t numPages = numSwapPages + numMemPages;
+        size_t pageTableSize = numPages * PG_TBL_ROW_SIZE;
+        while ((MEM_META_SIZE + libraryMemorySize + pageTableSize) % pageSize) {
+            libraryMemorySize--;
+            threadsMemorySize = libPlusThreadsSpace - libraryMemorySize;
+            memPgPlusMemTblSpace = threadsMemorySize - (numSwapPages * PG_TBL_ROW_SIZE);
+            numMemPages = memPgPlusMemTblSpace / pageWithTableRowSize;
+            numPages = numSwapPages + numMemPages;
+            pageTableSize = numPages * PG_TBL_ROW_SIZE;
+        }
 
+        // Setting memory's metadata based on calculated numbers
+        LIB_MEM_PART = createPartition(MEM_INFO + 1, libraryMemorySize);
+        SHRD_MEM_PART = createPartition(memory + MEM_SIZE - SHRD_MEM_SIZE, SHRD_MEM_SIZE);
+        PG_TBL = PG_TBL_ROW_PTR(memory + MEM_META_SIZE + libraryMemorySize);
+        NUM_MEM_PGS = numMemPages;
+        NUM_SWAP_PGS = numSwapPages;
+        SWAP_FILE = open("swapFile", O_CREAT|O_RDWR|O_TRUNC, S_IRUSR|S_IWUSR);
+        if (SWAP_FILE == -1) {
+            fprintf(stderr, "Error opening swapFile: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+
+<<<<<<< HEAD
     // Initializing the page table
     off_t i;
     for (i = 0; i < numMemPages; i++) {
@@ -569,6 +609,44 @@ void initializeMemory() {
         fprintf(stderr, "Error setting up signal handler for bad page access: %s\n", strerror(errno));
 >>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
         exit(EXIT_FAILURE);
+=======
+        // Setting signal handler to be fired as the
+        // last function before the program exits
+        atexit(cleanup);
+
+        // Create 16MB swap file
+        seekSwapFile(SWAP_SIZE - 1);
+        if (write(SWAP_FILE, "\0", 1) == -1) {
+            fprintf(stderr, "Error initializing swapFile to 16MB: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+
+        // Initializing the page table
+        off_t i;
+        for (i = 0; i < numMemPages; i++) {
+            PG_TBL[i].thread = NULL;
+            PG_TBL[i].physicalLocation = MEM_PGS + (i * pageSize);
+            PG_TBL[i].virtualLocation = -1;
+        }
+        off_t j;
+        for (j = 0; j < numSwapPages; j += pageSize) {
+            PG_TBL[i].thread = NULL;
+            PG_TBL[i].physicalLocation = NULL;
+            PG_TBL[i].virtualLocation = j;
+            i++;
+        }
+
+        // Setting signal handler to be fired on bad page access
+        protectPages(MEM_PGS, numMemPages);
+        struct sigaction sa;
+        sa.sa_flags = SA_SIGINFO;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_sigaction = onBadAccess;
+        if (sigaction(SIGSEGV, &sa, NULL) == -1) {
+            fprintf(stderr, "Error setting up signal handler for bad page access: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+>>>>>>> 6f8ed841cebf1965ef571fb237f71483a121b19f
     }
 }
 
@@ -631,16 +709,18 @@ void * allocateFrom(size_t size, struct memoryPartition * partition) {
 // Allocates size bytes in memory and returns a pointer to it
 =======
 // Allocates size bytes from the approprite partition and returns a pointer
+<<<<<<< HEAD
 // to the allocation. Returns NULL if no space or on bad request. Undefined
 // behavior occurs if this function is called as a thread before creating a
 // thread from the thread library.
 >>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
+=======
+// to the allocation. Returns NULL if no space or on bad request.
+>>>>>>> 6f8ed841cebf1965ef571fb237f71483a121b19f
 void * myallocate(size_t size, char * fileName, int lineNumber, int request) {
 
-    // Initialize the memory manager if not already
-    if (!memory) {
-        initializeMemory();
-    }
+    // Initialize the memory manager
+    initializeMemory();
 
     // Allocate from the thread library's partition
     if (request == LIBRARYREQ) {
@@ -691,10 +771,9 @@ void * shalloc(size_t size) {
     // If memory is null, initialize it
 =======
 // Allocates size bytes from memory as a thread.
-// Returns NULL if no space of size is 0. Undefined
-// behavior occurs if this function is called before
-// creating a thread from the thread library.
+// Returns NULL if no space of size is 0.
 void * threadAllocate(size_t size) {
+    initializeThreads();
     if (!size) { return NULL; }
     return myallocate(size, __FILE__, __LINE__, THREADREQ);
 }
@@ -702,6 +781,7 @@ void * threadAllocate(size_t size) {
 // Returns a pointer of size bytes from shared
 // memory. Returns NULL if no space or size is 0.
 void * shalloc(size_t size) {
+<<<<<<< HEAD
 
     // Initialize the memory manager if not already
 >>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
@@ -714,6 +794,10 @@ void * shalloc(size_t size) {
     if (!size) { return NULL; }
 
 >>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
+=======
+    initializeMemory();
+    if (!size) { return NULL; }
+>>>>>>> 6f8ed841cebf1965ef571fb237f71483a121b19f
     block = 1;
     void * ret = allocateFrom(size, &SHRD_MEM_PART);
     block = 0;
@@ -789,8 +873,12 @@ void mydeallocate(void * ptr, char * fileName, int lineNumber, int request) {
 // Frees ptr's block if ptr is in the shared partition
 // or the thread's partition. Undifined behavior occurs
 // if ptr was already freed or if ptr wasn't retrned by
+<<<<<<< HEAD
 // an allocating fucntion.
 >>>>>>> 8e8f7cc9cb26c9db48aa6ef389bfc84392849ec0
+=======
+// an allocating fucntion. Does nothing is ptr is NULL.
+>>>>>>> 6f8ed841cebf1965ef571fb237f71483a121b19f
 void threadDeallocate(void * ptr) {
-    mydeallocate(ptr, __FILE__, __LINE__, THREADREQ);
+    if (ptr) { mydeallocate(ptr, __FILE__, __LINE__, THREADREQ); }
 }
