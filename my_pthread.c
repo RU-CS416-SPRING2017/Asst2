@@ -205,14 +205,14 @@ void schedule(int signum) {
 	}
 }
 
-// Initializes the thread library
-void initializeThreads() {
+/* create a new thread */
+int my_pthread_create(my_pthread_t * thread, pthread_attr_t * attr, void *(*function)(void*), void * arg) {
+
+	block = 1;
 
 	// This block only runs on the first call to
 	// my_pthread_create
 	if (!initialized) {
-
-		block = 1;
 
 		// Initialize the priority queues
 		initializePQs();
@@ -240,15 +240,9 @@ void initializeThreads() {
 		currentTcb = getNewTcb();
 
 		initialized = 1;
-		block = 0;
 	}
-}
 
-/* create a new thread */
-int my_pthread_create(my_pthread_t * thread, pthread_attr_t * attr, void *(*function)(void*), void * arg) {
-
-	initializeThreads();
-	block = 1;
+	block = 0;
 
 	// Create the new thread and add it to high priority
 	tcb * newTcb = getNewTcb();
@@ -261,7 +255,6 @@ int my_pthread_create(my_pthread_t * thread, pthread_attr_t * attr, void *(*func
 	*thread = newTcb;
 	enqueue(newTcb, &(PQs[0].queue));
 
-	block = 0;
 	return 0;
 };
 
@@ -279,9 +272,9 @@ int my_pthread_yield() {
 		currentTcb = nextTcb;
 		gettimeofday(&(currentTcb->start), NULL);
 		enqueue(previousTcb, &(PQs[previousTcb->priorityLevel].queue));
+		block = 0;
 		protectAllPages(previousTcb);
 		unprotectAllPages(currentTcb);
-		block = 0;
 		swapcontext(&(previousTcb->context), &(currentTcb->context));
 	}
 
@@ -331,9 +324,9 @@ int my_pthread_join(my_pthread_t thread, void **value_ptr) {
 		joining->waiter = currentTcb;
 		currentTcb = getNextTcb();
 		gettimeofday(&(currentTcb->start), NULL);
+		block = 0;
 		protectAllPages(joining->waiter);
 		unprotectAllPages(currentTcb);
-		block = 0;
 		swapcontext(&(joining->waiter->context), &(currentTcb->context));
 	}
 
@@ -382,9 +375,9 @@ int my_pthread_mutex_lock(my_pthread_mutex_t *mutex) {
 		}
 
 		gettimeofday(&(currentTcb->start), NULL);
+		block = 0;
 		protectAllPages(previousTcb);
 		unprotectAllPages(currentTcb);
-		block = 0;
 		swapcontext(&(previousTcb->context), &(currentTcb->context));
 
 	} else {
