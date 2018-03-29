@@ -33,7 +33,7 @@ void threadDeallocate(void * ptr);
 
 #### Description
 
-The `threadAllocate()` function allocates `size` bytes and returns a pointer to the allocated memory. This memory con only be accessed by the calling thread. The memory is not initialized. If `size` is  0, then `threadAllocate()` returns `NULL`.
+The `threadAllocate()` function allocates `size` bytes and returns a pointer to the allocated memory. This memory con only be accessed by the calling thread. The memory is not initialized. If `size` is  `0`, then `threadAllocate()` returns `NULL`.
 
 The `shalloc()` function is the same as `threadAllocate()` except that the allocated memory is accessible to all threads.
 
@@ -41,7 +41,7 @@ The `threadDeallocate()` function frees the memory space pointed to by `ptr`, wh
 
 #### Return Value
 
-The `threadAllocate()` and `shalloc()` functions return a pointer to the allocated memory that is suitably aligned for any kind of variable. The difference between the two is that the allocated memory from `threadAllocate()` can only be accessed by the calling thread while the allocated memory from `shalloc()` can be accessed by any thread. On error, these functions return `NULL`. An error occurs if there is not enough memory to allocate or if `threadAllocate()` is called before atleast one thread has been created through this library. `NULL` is also returned by a successful call to `threadAllocate()` or `shalloc()` with a `size` of zero.
+The `threadAllocate()` and `shalloc()` functions return a pointer to the allocated memory that is suitably aligned for any kind of variable. The difference between the two is that the allocated memory from `threadAllocate()` can only be accessed by the calling thread while the allocated memory from `shalloc()` can be accessed by any thread. On error, these functions return `NULL`. An error occurs if there is not enough memory to allocate. `NULL` is also returned by a successful call to `threadAllocate()` or `shalloc()` with a `size` of zero.
 
 The `threadDeallocate()` function returns no value.
 
@@ -74,3 +74,17 @@ The memory manager is initialized on the first call to either `myallocate()` or 
 ### Allocation
 
 The `allocateFrom()` function allcates memory from a givin partition. It uses a first fit algorithm allocating from The first free "block" it finds that is big enough to satisfy the request. If the "block" is too big, it is split up into two "blocks" where the fisrt "block's" payload is set to the size of the request and used for the allocation. A "block" is too big if its payload is greater than the requested size plus "block" metadata. If the found "block" is not too big it's used for the allocation without splitting. A "block" used for allocation is set to used and a pointer to the payload is returned. If there are no "blocks" in the specified "partition" to satisfy the request, `NULL` is returned.
+
+#### Allocating as the Thread Library
+
+Allocating from as the thread library with `myallocate()` simply returns a call to `allocateFrom()` using the thread library's partition.
+
+#### Allocating as a Thread
+
+All threads share the same memory space. This is possible because the threads' memory space is devided into pages giving an illusion of contiguous memory. There are also pages that reside in the swap file giving an illusion of an abundance of memory so when. Pages in memory are protected so if a thread tries to access an address that currently points to a page it doesn't own, the signal handler `onBadAccess()` will be fired. When `onBadAccess()` is called, it first calculates the page number the current thread tried to access. The signal handler then searches the page table for the appropriate page, and if it can't find the page it assigns a new page to the thread. The target page and the page currently at the accessed address are both unproteced adn swapped. After the swap, the page that was swapped out is protected. If the thread has been assigned a new page and the new page is the first page assigned to the thread, the page is initialized by setting the metadata and creating a partition that fills the page.
+
+Allocating as a thread should be done using the `threadAllocate()` function. This function initializes the thread library if it hasn't already been initialized. This allows for the use of thread allocation without having to create a thread first. `threadAllocate()` also returns NULL if the requested size is `0`. If the requested size is greater than 0 a call to `myallocate()` as a thread is returned.
+
+When the `myallocate()` funtion is called as a thread, it blocks the scheduler to ensure thread safety. It then calls `allocateFrom()` using the thread's "partition" and stores the return value in `ret`. As long as `ret` is equal to `NULL` and the current thread can be assigned a new page, the thread's "partition" keeps getting increased the size of one page and `allocateFrom()` is called again with the extended "patition" and the return value is stored in `ret`. Once this is done, `ret` is returned. Essentially, this process only returns `NULL` if the thread's current "partition" doesn't have the requested memory, there are no new pages, or the thread already has enough pages to occupy the whole memory space.
+
+Because an allocation from `myallocate()` is only accessible by the thread that called the function for that allocation, the `shalloc()` functions allows for allocations that can be shared between threads. If the specified size is 0, `shalloc()` returns `NULL`. If the specified `size` is greater than 0, `shalloc()` simply returns a call to `allocateFrom()` with the shared memory "partition".
