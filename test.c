@@ -1,22 +1,23 @@
 #include "my_pthread_t.h"
 
 void * test(void * nun) {
-    char * some = malloc(4096 * 800);
+    char * some = shalloc(40);
     sprintf(some, "in test");
     printf("%s\n", some);
+	fflush(stdout);
     free(some);
-    malloc(40);
-    sprintf(some, "in test1");
-    printf("%s\n", some);
-    return NULL;
+    char * sometwo = shalloc(40);
+    sprintf(sometwo, "in test1");
+    printf("%s\n", sometwo);
+    pthread_exit(sometwo);
 }
 
 void * test2(void * nun) {
-    char * some = malloc(4096 * 800);
+    char * some = shalloc(40);
     sprintf(some, "in test2");
     printf("%s\n", some);
-    free(some);
-    return NULL;
+    // free(some);
+    pthread_exit(some);
 }
 
 int main() {
@@ -26,7 +27,15 @@ int main() {
     pthread_create(&t2, NULL, test2, NULL);
     printf("in main\n");
     void * ret;
+	char * some;
     pthread_join(t, &ret);
+	fflush(stdout);
+	printf("back in main\n");
+	fflush(stdout);
+	some = ret;
+	printf("%s\n", some);
     pthread_join(t2, &ret);
+	some = ret;
+	printf("%s\n", some);
     return 0;
 }
