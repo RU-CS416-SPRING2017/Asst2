@@ -88,3 +88,15 @@ Allocating as a thread should be done using the `threadAllocate()` function. Thi
 When the `myallocate()` funtion is called as a thread, it blocks the scheduler to ensure thread safety. It then calls `allocateFrom()` using the thread's "partition" and stores the return value in `ret`. As long as `ret` is equal to `NULL` and the current thread can be assigned a new page, the thread's "partition" keeps getting increased the size of one page and `allocateFrom()` is called again with the extended "patition" and the return value is stored in `ret`. Once this is done, `ret` is returned. Essentially, this process only returns `NULL` if the thread's current "partition" doesn't have the requested memory, there are no new pages, or the thread already has enough pages to occupy the whole memory space.
 
 Because an allocation from `myallocate()` is only accessible by the thread that called the function for that allocation, the `shalloc()` functions allows for allocations that can be shared between threads. If the specified size is 0, `shalloc()` returns `NULL`. If the specified `size` is greater than 0, `shalloc()` simply returns a call to `allocateFrom()` with the shared memory "partition".
+
+### Deallocation
+
+The `deallocateFrom()` function deallocates memory that was previously allocated with `allocateFrom()`. If the supplied pointer resides within the given "partition" deallocation proceeds otherwise no action is taken. Deallocation start by finding the "head" and "tail" of the "block" that's referenced by the suplied pointer. `deallocateFrom()` then coelleses the "block" with it's immediate neighbors if they are free. Finally the resulting block is set to free.
+
+#### Deallocating as the Thread Library
+
+Deallocating with `mydeallocate()` as the thread library simply calls `deallocateFrom()` using the thread library's "partition".
+
+#### Deallocating as a Thread
+
+Calling `mydeallocate()` as a thread first tries to call `deallocateFrom()` as with the thread's "partition" and if that isn't the correct "partition" it calls `deallocateFrom()` again with the shared memory "partition".
