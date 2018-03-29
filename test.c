@@ -21,7 +21,10 @@ void * test2(void * nun) {
 }
 
 int main() {
-
+    char * rand = malloc(200);
+    sprintf(rand, "thanks dog");
+    printf("%s\n", rand);
+    fflush(stdout);
     pthread_t t, t2;
     pthread_create(&t, NULL, test, NULL);
     pthread_create(&t2, NULL, test2, NULL);
