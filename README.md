@@ -33,7 +33,7 @@ void threadDeallocate(void * ptr);
 
 #### Description
 
-The `threadAllocate()` function allocates `size` bytes and returns a pointer to the allocated memory. This memory con only be accessed by the calling thread. The memory is not initialized. If `size` is  `0`, then `threadAllocate()` returns `NULL`.
+The `threadAllocate()` function allocates `size` bytes and returns a pointer to the allocated memory. This memory can only be accessed by the calling thread. The memory is not initialized. If `size` is  `0`, then `threadAllocate()` returns `NULL`.
 
 The `shalloc()` function is the same as `threadAllocate()` except that the allocated memory is accessible to all threads.
 
