@@ -59,11 +59,13 @@ A "block" is a chunk of memory that consists of a "head", a "payload", and a "ta
 
 ### Main Memory Divisions
 
-#### Thread Library "Partition"
+The thread libaray "partition" is used to allocate memory on library calls to `myallocate`.
 
-This "partition" is used to allocate memory on library calls to `myallocate`.
+The page table holds information for all the tables in the in memory and swap file. Each row of the table has the thread's info, page number of the thread, location in memory, and swap file location. If thread is 0 the page is free, if location in memory is 0 then the page is in the swap file.
 
-The thread library "partition" starts right after `memory`'s metadata, pricicely at the address `memory + sizeof(struct memoryMetadata)`. It's size is calculated on initialization by first finding the space left in `memory` after reserving space for the metadata and shared memory "partition". The leftover space is then devided based on
+The memory pages are the pages that are located inside memory. This region is alligned with the system page. Used to allocate memory that can only be accessed by the allocator.
+
+The shared memory "partition" is used to allocated memory that can be shared between thread.
 
 ## Implementation
 
